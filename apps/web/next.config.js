@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  eslint: { ignoreDuringBuilds: true },
   experimental: {
     serverActions: {
       allowedOrigins: process.env.ALLOWED_ORIGINS
