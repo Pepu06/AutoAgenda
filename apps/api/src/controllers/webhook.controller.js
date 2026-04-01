@@ -74,7 +74,8 @@ async function findPendingAppointmentByPhone(phone) {
     .from('appointments')
     .select('id, tenant_id, google_event_id, user_id, contact_id')
     .eq('contact_id', matchedContact.id)
-    .in('status', ['pending', 'confirmed', 'cancelled']) // Consider all non-final statuses
+    .in('status', ['pending', 'confirmed', 'cancelled'])
+    .gte('scheduled_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
     .order('scheduled_at', { ascending: true })
     .limit(1)
     .maybeSingle();
