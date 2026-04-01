@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  owner
+  staff
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  cancelled
+  completed
+  no_show
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum MessageType {
+  confirmation
+  reminder
+  follow_up
+  reply
+}
+
+enum MessageStatus {
+  sent
+  delivered
+  read
+  failed
+}
+
+model Tenant {
+  id                     String   @id @default(cuid())
+  name                   String
+  slug                   String   @unique
+  plan                   String   @default("free")
+  whatsappPhoneNumberId  String?
+  whatsappAccessToken    String?
+  createdAt              DateTime @default(now())
+
+  users             User[]
+  contacts          Contact[]
+  services          Service[]
+  appointments      Appointment[]
+  availabilityRules AvailabilityRule[]
+  messageLogs       MessageLog[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  email        String   @unique
+  passwordHash String?
+  role         UserRole @default(staff)
+  createdAt    DateTime @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  availabilityRules AvailabilityRule[]
+
+  @@index([tenantId])
+}
+
+model Contact {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  phone    String
+  notes    String?
+  createdAt DateTime @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([tenantId])
+}
+
+model Service {
+  id              String  @id @default(cuid())
+  tenantId        String
+  name            String
+  durationMinutes Int
+  price           Decimal @default(0)
+  createdAt       DateTime @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([tenantId])
+}
+
+model Appointment {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  contactId          String
+  serviceId          String
+  userId             String
+  scheduledAt        DateTime
+  status             AppointmentStatus @default(pending)
+  notes              String?
+  reminderSentAt     DateTime?
+  confirmationSentAt DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact     Contact      @relation(fields: [contactId], references: [id])
+  service     Service      @relation(fields: [serviceId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  messageLogs MessageLog[]
+
+  @@index([tenantId])
+  @@index([tenantId, scheduledAt])
+  @@index([tenantId, status])
+}
+
+model AvailabilityRule {
+  id         String  @id @default(cuid())
+  tenantId   String
+  userId     String
+  dayOfWeek  Int
+  startTime  String
+  endTime    String
+  isActive   Boolean @default(true)
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+}
+
+model MessageLog {
+  id            String           @id @default(cuid())
+  tenantId      String
+  appointmentId String
+  type          MessageType
+  direction     MessageDirection @default(outbound)
+  status        MessageStatus    @default(sent)
+  sentAt        DateTime         @default(now())
+  waMessageId   String?
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  @@index([tenantId])
+  @@index([appointmentId])
+}

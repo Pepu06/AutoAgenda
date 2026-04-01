@@ -1,4 +1,4 @@
-const { prisma, supabase } = require('@recordai/db');
+const { prisma, supabase } = require('../../../web/packages/db');
 const { getCalendarEvent, updateEventTitleAndColor, refreshAccessToken } = require('../services/google');
 const env = require('../config/env');
 const logger = require('../config/logger');
