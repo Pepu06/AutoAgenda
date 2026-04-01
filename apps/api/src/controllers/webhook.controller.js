@@ -163,7 +163,7 @@ async function processMessage(message, _metadata) {
 
         const tz = tenant.timezone || 'America/Argentina/Buenos_Aires';
         const apptDate = new Date(fullAppt.scheduled_at);
-        const dateStr = apptDate.toLocaleDateString('es-AR', { timeZone: tz, dateStyle: 'full' });
+        const dateStr = apptDate.toLocaleDateString('es-AR', { timeZone: tz, weekday: 'long', day: '2-digit', month: '2-digit' });
         const timeStr = apptDate.toLocaleTimeString('es-AR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
 
         // Strip +549 prefix so template can prepend it: "+549{{2}}"
