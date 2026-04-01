@@ -1,4 +1,4 @@
-const { supabase, convertKeys } = require('../../../web/packages/db');
+const { supabase, convertKeys } = require('@recordai/db');
 const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor } = require('../services/google');
 const { sendTemplate } = require('../services/whatsapp');
 const { AppError } = require('../errors');
