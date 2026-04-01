@@ -70,11 +70,14 @@ async function sendTemplate(phone, templateName, params = []) {
 
   // - Array        => body params only (backward compat)
   // - { header, body } => separate header and body params
+  let buttonParams = [];
+
   if (Array.isArray(params)) {
     bodyParams = params;
   } else {
-    headerParams = params?.header || [];
-    bodyParams = params?.body   || [];
+    headerParams = params?.header  || [];
+    bodyParams   = params?.body    || [];
+    buttonParams = params?.buttons || [];
   }
 
   const components = [];
@@ -83,6 +86,15 @@ async function sendTemplate(phone, templateName, params = []) {
   }
   if (bodyParams.length) {
     components.push({ type: 'body', parameters: bodyParams.map(toParam) });
+  }
+  // Quick-reply buttons with custom payload (embeds appointmentId)
+  for (const btn of buttonParams) {
+    components.push({
+      type:       'button',
+      sub_type:   'quick_reply',
+      index:      String(btn.index),
+      parameters: [{ type: 'payload', payload: btn.payload }],
+    });
   }
 
   const payload = {
