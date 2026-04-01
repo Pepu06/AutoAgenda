@@ -55,27 +55,28 @@ async function findPendingAppointmentByPhone(phone) {
   const phoneDigits = onlyDigits(phone);
   const phoneLast10 = phoneDigits.slice(-10);
 
-  // Match contacts by last 10 digits to avoid format issues (+54, 549, spaces, etc.)
   const { data: contacts, error: contactsError } = await supabase
     .from('contacts')
     .select('id, phone')
     .ilike('phone', `%${phoneLast10}`)
     .limit(50);
 
-  console.log(contacts);
   if (contactsError) throw contactsError;
-
   if (!contacts?.length) return null;
 
   const matchedContact = contacts.find((c) => onlyDigits(c.phone).endsWith(phoneLast10));
   if (!matchedContact) return null;
+
+  // Look for the nearest upcoming appointment (or one from the last 48h)
+  // Include cancelled so users can reverse a mistaken button press
+  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
   const { data: appointment, error: appointmentError } = await supabase
     .from('appointments')
     .select('id, tenant_id, google_event_id, user_id, contact_id')
     .eq('contact_id', matchedContact.id)
     .in('status', ['pending', 'confirmed', 'cancelled'])
-    .gte('scheduled_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+    .gte('scheduled_at', cutoff)
     .order('scheduled_at', { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -164,6 +165,7 @@ async function processMessage(message, _metadata) {
 
         const tz = tenant.timezone || 'America/Argentina/Buenos_Aires';
         const apptDate = new Date(fullAppt.scheduled_at);
+        logger.info({ appointmentId: appointment.id, scheduled_at: fullAppt.scheduled_at, tz, service: fullAppt.service?.name }, 'Admin cancel alert data');
         const dateStr = apptDate.toLocaleDateString('es-AR', { timeZone: tz, weekday: 'long', day: '2-digit', month: '2-digit' });
         const timeStr = apptDate.toLocaleTimeString('es-AR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
 
