@@ -69,11 +69,15 @@ async function findPendingAppointmentByPhone(phone) {
   const matchedContact = contacts.find((c) => onlyDigits(c.phone).endsWith(phoneLast10));
   if (!matchedContact) return null;
 
+  // Find the appointment closest to now (upcoming or up to 2h past)
+  const windowStart = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
   const { data: appointment, error: appointmentError } = await supabase
     .from('appointments')
     .select('id, tenant_id, google_event_id, user_id, contact_id')
     .eq('contact_id', matchedContact.id)
     .in('status', ['pending', 'confirmed', 'cancelled'])
+    .gte('scheduled_at', windowStart)
     .order('scheduled_at', { ascending: true })
     .limit(1)
     .maybeSingle();
