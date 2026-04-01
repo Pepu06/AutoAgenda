@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const auth = require('../middleware/auth');
-const { calendarStatus, connect, disconnect, events, updateEventStatus, remindEvent } = require('../controllers/calendar.controller');
+const { calendarStatus, connect, disconnect, events, createEvent, updateEventStatus, remindEvent } = require('../controllers/calendar.controller');
 
 const router = Router();
 
@@ -10,6 +10,7 @@ router.get('/status',        calendarStatus);
 router.post('/connect',      connect);
 router.post('/disconnect',   disconnect);
 router.get('/events',                  events);
+router.post('/events',                 createEvent);
 router.patch('/events/:eventId/status', updateEventStatus);
 router.post('/remind/:eventId',         remindEvent);
 

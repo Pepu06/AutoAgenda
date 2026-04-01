@@ -167,6 +167,32 @@ async function getTodayCalendarEvents(accessToken) {
   return data.items || [];
 }
 
+async function createCalendarEvent(accessToken, { summary, description, startDateTime, endDateTime, attendees = [] }) {
+  const body = {
+    summary,
+    description,
+    start: { dateTime: startDateTime },
+    end:   { dateTime: endDateTime },
+  };
+  if (attendees.length) body.attendees = attendees.map(email => ({ email }));
+
+  const params = new URLSearchParams();
+  if (attendees.length) params.set('sendUpdates', 'all');
+
+  const url = `${CAL_BASE}/calendars/primary/events${params.toString() ? `?${params}` : ''}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(`Google Calendar POST failed (${res.status}): ${data?.error?.message || 'unknown error'}`);
+  }
+  return res.json();
+}
+
 module.exports = {
   exchangeCodeForTokens,
   refreshAccessToken,
@@ -176,4 +202,5 @@ module.exports = {
   getTodayCalendarEvents,
   updateEventColor,
   updateEventTitleAndColor,
+  createCalendarEvent,
 };

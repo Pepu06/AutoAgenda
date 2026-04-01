@@ -1,6 +1,8 @@
 const { supabase, convertKeys } = require('@recordai/db');
-const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor } = require('../services/google');
+const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor, createCalendarEvent } = require('../services/google');
 const { sendTemplate } = require('../services/whatsapp');
+const { appointmentsQueue } = require('../workers/queue');
+const { JobName } = require('@recordai/shared');
 const { AppError } = require('../errors');
 
 const PHONE_REGEX = /\+?\d[\d\s()-]{7,}/;
@@ -128,7 +130,6 @@ async function events(req, res, next) {
         const start = e.start?.dateTime || `${e.start.date}T12:00:00`;
         const colorId = e.colorId || null;
         const phone = extractPhoneFromSummary(e.summary || '');
-        // Strip any status suffix from the display title
         const displayTitle = (e.summary || '(Sin título)').replace(/\s*-\s*(CONFIRMADO|CANCELADO)$/i, '').trim();
         return {
           id:          e.id,
@@ -140,6 +141,7 @@ async function events(req, res, next) {
           attendees:   (e.attendees || []).filter(a => !a.self).map(a => ({ name: a.displayName || a.email, email: a.email })),
           colorId,
           status:      COLOR_STATUS[colorId] || null,
+          description: e.description || '',
         };
       })
       .filter(e => !!e.phone); // only events with a client phone number
@@ -181,28 +183,28 @@ async function events(req, res, next) {
         contacts.push(createdContact);
       }
 
-      // Ensure there is at least one service for imported appointments
-      let { data: firstService } = await supabase
+      // Fetch all services to match by description
+      let { data: allServices } = await supabase
         .from('services')
-        .select('id')
+        .select('id, name')
         .eq('tenant_id', req.tenantId)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .order('created_at', { ascending: true });
 
-      if (!firstService?.id) {
+      if (!allServices?.length) {
         const { data: createdService, error: createServiceError } = await supabase
           .from('services')
-          .insert({
-            tenant_id: req.tenantId,
-            name: 'Consulta general',
-            duration_minutes: 30,
-            price: 0,
-          })
-          .select('id')
+          .insert({ tenant_id: req.tenantId, name: 'Consulta general', duration_minutes: 30, price: 0 })
+          .select('id, name')
           .single();
         if (createServiceError) throw createServiceError;
-        firstService = createdService;
+        allServices = [createdService];
+      }
+
+      // Match event description to a service name (case-insensitive substring)
+      function matchService(description = '') {
+        if (!description) return allServices[0];
+        const desc = description.toLowerCase();
+        return allServices.find(s => desc.includes(s.name.toLowerCase())) || allServices[0];
       }
 
       // Ensure appointments exist for calendar events with phone
@@ -218,15 +220,17 @@ async function events(req, res, next) {
         });
         if (!contact) continue;
 
+        const service = matchService(event.description);
+
         const { error: createAppointmentError } = await supabase
           .from('appointments')
           .insert({
-            tenant_id: req.tenantId,
-            contact_id: contact.id,
-            service_id: firstService.id,
-            user_id: req.userId,
-            scheduled_at: new Date(event.start).toISOString(),
-            status: event.status || 'pending',
+            tenant_id:      req.tenantId,
+            contact_id:     contact.id,
+            service_id:     service.id,
+            user_id:        req.userId,
+            scheduled_at:   new Date(event.start).toISOString(),
+            status:         event.status || 'pending',
             google_event_id: event.id,
           });
 
@@ -346,4 +350,75 @@ async function remindEvent(req, res, next) {
   } catch (err) { return next(err); }
 }
 
-module.exports = { calendarStatus, connect, disconnect, events, updateEventStatus, remindEvent };
+async function createEvent(req, res, next) {
+  try {
+    const { contactId, serviceId, scheduledAt, notes } = req.body;
+
+    const [{ data: contact }, { data: service }] = await Promise.all([
+      supabase.from('contacts').select('id, name, phone, email').eq('id', contactId).eq('tenant_id', req.tenantId).single(),
+      supabase.from('services').select('id, name, duration_minutes').eq('id', serviceId).eq('tenant_id', req.tenantId).single(),
+    ]);
+    if (!contact || !service) throw new AppError('Contacto o servicio no encontrado', 404);
+
+    const { data: appointment, error } = await supabase
+      .from('appointments')
+      .insert({
+        tenant_id:    req.tenantId,
+        contact_id:   contactId,
+        service_id:   serviceId,
+        user_id:      req.userId,
+        scheduled_at: new Date(scheduledAt).toISOString(),
+        notes,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+
+    // Create Google Calendar event
+    const accessToken = await getValidToken(req.userId);
+    if (accessToken) {
+      const startDate = new Date(scheduledAt);
+      const endDate   = new Date(startDate.getTime() + service.duration_minutes * 60000);
+      const attendees = contact.email ? [contact.email] : [];
+
+      const calEvent = await createCalendarEvent(accessToken, {
+        summary:       `${contact.name} [${contact.phone}]`,
+        description:   service.name,
+        startDateTime: startDate.toISOString(),
+        endDateTime:   endDate.toISOString(),
+        attendees,
+      }).catch(() => null);
+
+      if (calEvent?.id) {
+        await supabase.from('appointments').update({ google_event_id: calEvent.id }).eq('id', appointment.id);
+      }
+    }
+
+    // Queue WhatsApp jobs
+    const queueJob = (name, opts = {}) =>
+      appointmentsQueue.add(name, { appointmentId: appointment.id }, opts).catch(() => {});
+
+    queueJob(JobName.SEND_CONFIRMATION);
+
+    const { data: tenant } = await supabase.from('tenants').select('timezone, reminder_type, reminder_time').eq('id', req.tenantId).single();
+    const reminderDelay = calcReminderDelay(scheduledAt, tenant?.timezone, tenant?.reminder_type, tenant?.reminder_time);
+    if (reminderDelay > 0) queueJob(JobName.SEND_REMINDER, { delay: reminderDelay });
+    queueJob(JobName.SEND_FOLLOW_UP, { delay: 2 * 60 * 60 * 1000 });
+
+    return res.status(201).json({ success: true, data: convertKeys(appointment) });
+  } catch (err) { return next(err); }
+}
+
+function calcReminderDelay(scheduledAt, timezone, reminderType, reminderTime) {
+  const [hh, mm] = (reminderTime || '10:00').split(':').map(Number);
+  const appt = new Date(scheduledAt);
+  const localDateStr = appt.toLocaleDateString('en-CA', { timeZone: timezone || 'UTC' });
+  let [year, month, day] = localDateStr.split('-').map(Number);
+  if (reminderType === 'day_before') day -= 1;
+  const reminderAsUTC = new Date(Date.UTC(year, month - 1, day, hh, mm, 0));
+  const localMs = new Date(reminderAsUTC.toLocaleString('en-US', { timeZone: timezone || 'UTC' })).getTime();
+  const utcMs   = new Date(reminderAsUTC.toLocaleString('en-US', { timeZone: 'UTC' })).getTime();
+  return new Date(reminderAsUTC.getTime() + (utcMs - localMs)).getTime() - Date.now();
+}
+
+module.exports = { calendarStatus, connect, disconnect, events, createEvent, updateEventStatus, remindEvent };

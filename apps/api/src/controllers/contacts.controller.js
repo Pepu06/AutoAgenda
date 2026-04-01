@@ -15,10 +15,10 @@ async function list(req, res, next) {
 
 async function create(req, res, next) {
   try {
-    const { name, phone, notes } = req.body;
+    const { name, phone, notes, email } = req.body;
     const { data, error } = await supabase
       .from('contacts')
-      .insert({ tenant_id: req.tenantId, name, phone, notes })
+      .insert({ tenant_id: req.tenantId, name, phone, notes, email: email || null })
       .select().single();
     if (error) throw error;
     return res.status(201).json({ success: true, data: convertKeys(data) });
@@ -40,9 +40,9 @@ async function update(req, res, next) {
       .from('contacts').select('id').eq('id', req.params.id).eq('tenant_id', req.tenantId).maybeSingle();
     if (!existing) throw new NotFoundError('Contact not found');
 
-    const { name, phone, notes } = req.body;
+    const { name, phone, notes, email } = req.body;
     const { data, error } = await supabase
-      .from('contacts').update({ name, phone, notes }).eq('id', req.params.id).select().single();
+      .from('contacts').update({ name, phone, notes, email: email || null }).eq('id', req.params.id).select().single();
     if (error) throw error;
     return res.json({ success: true, data: convertKeys(data) });
   } catch (err) { return next(err); }

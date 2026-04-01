@@ -9,7 +9,7 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({ name: '', phone: '', notes: '' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', notes: '' });
   const [error, setError] = useState('');
 
   async function fetchContacts() {
@@ -23,13 +23,13 @@ export default function ContactsPage() {
 
   function startEdit(contact) {
     setEditId(contact.id);
-    setForm({ name: contact.name, phone: contact.phone, notes: contact.notes || '' });
+    setForm({ name: contact.name, phone: contact.phone, email: contact.email || '', notes: contact.notes || '' });
     setShowForm(true);
   }
 
   function cancelForm() {
     setEditId(null);
-    setForm({ name: '', phone: '', notes: '' });
+    setForm({ name: '', phone: '', email: '', notes: '' });
     setShowForm(false);
     setError('');
   }
@@ -86,6 +86,13 @@ export default function ContactsPage() {
             onChange={(e) => setForm({ ...form, phone: e.target.value })}
             className={styles.input}
             required
+          />
+          <input
+            placeholder="Email (opcional, para invitar como participante en Calendar)"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            className={styles.input}
+            type="email"
           />
           <input
             placeholder="Notas (opcional)"

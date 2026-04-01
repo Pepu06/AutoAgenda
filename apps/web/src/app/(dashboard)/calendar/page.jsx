@@ -62,6 +62,8 @@ function GoogleCalIcon() {
   );
 }
 
+const EMPTY_CREATE = { contactId: '', serviceId: '', scheduledAt: '', notes: '' };
+
 export default function CalendarPage() {
   const [connected, setConnected]     = useState(false);
   const [events, setEvents]           = useState([]);
@@ -71,6 +73,12 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(() => { const d = new Date(); d.setDate(1); return d; });
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [showCreate, setShowCreate]   = useState(false);
+  const [createForm, setCreateForm]   = useState(EMPTY_CREATE);
+  const [creating, setCreating]       = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [contacts, setContacts]       = useState([]);
+  const [services, setServices]       = useState([]);
 
   const fetchStatus = useCallback(async () => {
     const res = await api.get('/calendar/status');
@@ -110,6 +118,33 @@ export default function CalendarPage() {
     await api.post('/calendar/disconnect');
     setConnected(false);
     setEvents([]);
+  }
+
+  async function openCreate() {
+    if (!contacts.length) {
+      const [c, s] = await Promise.all([api.get('/contacts'), api.get('/services')]);
+      setContacts(c.data || []);
+      setServices(s.data || []);
+    }
+    setCreateForm({ ...EMPTY_CREATE, scheduledAt: selectedDate ? `${selectedDate}T09:00` : '' });
+    setCreateError('');
+    setShowCreate(true);
+  }
+
+  async function handleCreateEvent(e) {
+    e.preventDefault();
+    setCreating(true);
+    setCreateError('');
+    try {
+      await api.post('/calendar/events', createForm);
+      setShowCreate(false);
+      setCreateForm(EMPTY_CREATE);
+      await fetchEvents();
+    } catch (err) {
+      setCreateError(err.message || 'Error al crear la cita');
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function handleRemind(eventId) {
@@ -169,6 +204,7 @@ export default function CalendarPage() {
         <div className={styles.headerActions}>
           {connected ? (
             <>
+              <button className={styles.btnSync} onClick={openCreate}>+ Nueva cita</button>
               <button className={styles.btnSync} onClick={fetchEvents} disabled={syncing}>
                 {syncing ? 'Sincronizando...' : '↻ Sincronizar'}
               </button>
@@ -302,6 +338,72 @@ export default function CalendarPage() {
           onRemind={() => handleRemind(selectedEvent.id)}
           onClose={() => setSelectedEvent(null)}
         />
+      )}
+
+      {showCreate && (
+        <div className={styles.popupBackdrop} onClick={() => setShowCreate(false)}>
+          <div className={styles.popup} onClick={e => e.stopPropagation()}>
+            <div className={styles.popupHeader}>
+              <div className={styles.popupAccent} style={{ background: '#0ea5ff' }} />
+              <h3 className={styles.popupTitle}>Nueva cita</h3>
+              <button className={styles.popupClose} onClick={() => setShowCreate(false)}>✕</button>
+            </div>
+            <form onSubmit={handleCreateEvent} className={styles.popupBody} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Contacto</label>
+                <select
+                  required
+                  value={createForm.contactId}
+                  onChange={e => setCreateForm(f => ({ ...f, contactId: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14 }}
+                >
+                  <option value="">Seleccionar contacto...</option>
+                  {contacts.map(c => <option key={c.id} value={c.id}>{c.name} — {c.phone}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Servicio</label>
+                <select
+                  required
+                  value={createForm.serviceId}
+                  onChange={e => setCreateForm(f => ({ ...f, serviceId: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14 }}
+                >
+                  <option value="">Seleccionar servicio...</option>
+                  {services.map(s => <option key={s.id} value={s.id}>{s.name} ({s.durationMinutes} min)</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Fecha y hora</label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={createForm.scheduledAt}
+                  onChange={e => setCreateForm(f => ({ ...f, scheduledAt: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Notas (opcional)</label>
+                <input
+                  type="text"
+                  value={createForm.notes}
+                  onChange={e => setCreateForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Ej: Trae estudios previos"
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14 }}
+                />
+              </div>
+              {createError && <p style={{ color: '#ef4444', fontSize: 13, margin: 0 }}>{createError}</p>}
+              <button
+                type="submit"
+                disabled={creating}
+                className={styles.popupRemindBtn}
+              >
+                {creating ? 'Creando...' : '+ Crear cita'}
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
