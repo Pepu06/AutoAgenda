@@ -3,7 +3,55 @@ const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeFor
 const { sendTemplate } = require('../services/whatsapp');
 const { AppError } = require('../errors');
 
-const PHONE_REGEX = /\+\d[\d\s()-]{7,}/;
+const PHONE_REGEX = /\+?\d[\d\s()-]{7,}/;
+
+function onlyDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function normalizePhone(rawPhone = '') {
+  const raw = String(rawPhone || '').trim();
+  const digits = onlyDigits(raw);
+  if (!digits) return null;
+
+  // Already international with country code
+  if (raw.startsWith('+') || digits.startsWith('54') || digits.startsWith('549')) {
+    return `+${digits}`;
+  }
+
+  // Argentina local mobile format without country code, e.g. 11XXXXXXXX
+  if (digits.length === 10 && digits.startsWith('11')) {
+    return `+549${digits}`;
+  }
+
+  // Generic fallback
+  return `+${digits}`;
+}
+
+function extractPhoneFromSummary(summary = '') {
+  // Prefer bracketed number: [ +54911... ] or [11...]
+  const bracketMatch = summary.match(/\[\s*(\+?\d[\d\s()-]{7,})\s*\]/);
+  const source = bracketMatch?.[1] || summary.match(PHONE_REGEX)?.[0] || null;
+  return normalizePhone(source);
+}
+
+function extractClientName(summary = '') {
+  const phoneMatch = summary.match(PHONE_REGEX);
+  const beforePhone = phoneMatch
+    ? summary.slice(0, phoneMatch.index)
+    : summary.replace(PHONE_REGEX, '');
+
+  const cleaned = beforePhone
+    .replace(/\s*-\s*(CONFIRMADO|CANCELADO)$/i, '')
+    .trim();
+
+  const conMatch = cleaned.match(/\bcon\b\s*(.+)$/i);
+  const fromCon = conMatch ? conMatch[1] : cleaned;
+
+  return fromCon
+    .replace(/[\[\](){},:;\-\s]+$/g, '')
+    .trim() || 'Cliente';
+}
 
 async function getValidToken(userId) {
   const { data: user } = await supabase
@@ -79,8 +127,7 @@ async function events(req, res, next) {
         const isAllDay = !e.start?.dateTime;
         const start = e.start?.dateTime || `${e.start.date}T12:00:00`;
         const colorId = e.colorId || null;
-        const phoneMatch = (e.summary || '').match(PHONE_REGEX);
-        const phone = phoneMatch?.[0]?.replace(/[\s()-]/g, '') || null;
+        const phone = extractPhoneFromSummary(e.summary || '');
         // Strip any status suffix from the display title
         const displayTitle = (e.summary || '(Sin título)').replace(/\s*-\s*(CONFIRMADO|CANCELADO)$/i, '').trim();
         return {
@@ -96,6 +143,97 @@ async function events(req, res, next) {
         };
       })
       .filter(e => !!e.phone); // only events with a client phone number
+
+    let contacts = [];
+
+    // Ensure contacts exist for calendar events with phone
+    if (data.length) {
+      const { data: existingContacts, error: contactsError } = await supabase
+        .from('contacts')
+        .select('id, name, phone')
+        .eq('tenant_id', req.tenantId);
+      if (contactsError) throw contactsError;
+
+      contacts = [...(existingContacts || [])];
+
+      for (const event of data) {
+        const phoneDigits = onlyDigits(event.phone);
+        const phoneLast10 = phoneDigits.slice(-10);
+
+        const alreadyExists = contacts.some((c) => {
+          const cDigits = onlyDigits(c.phone);
+          return cDigits === phoneDigits || (phoneLast10 && cDigits.endsWith(phoneLast10));
+        });
+
+        if (alreadyExists) continue;
+
+        const { data: createdContact, error: createContactError } = await supabase
+          .from('contacts')
+          .insert({
+            tenant_id: req.tenantId,
+            name: extractClientName(event.title),
+            phone: event.phone,
+          })
+          .select('id, name, phone')
+          .single();
+
+        if (createContactError) throw createContactError;
+        contacts.push(createdContact);
+      }
+
+      // Ensure there is at least one service for imported appointments
+      let { data: firstService } = await supabase
+        .from('services')
+        .select('id')
+        .eq('tenant_id', req.tenantId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (!firstService?.id) {
+        const { data: createdService, error: createServiceError } = await supabase
+          .from('services')
+          .insert({
+            tenant_id: req.tenantId,
+            name: 'Consulta general',
+            duration_minutes: 30,
+            price: 0,
+          })
+          .select('id')
+          .single();
+        if (createServiceError) throw createServiceError;
+        firstService = createdService;
+      }
+
+      // Ensure appointments exist for calendar events with phone
+      for (const event of data) {
+        if (syncedIds.has(event.id)) continue;
+
+        const phoneDigits = onlyDigits(event.phone);
+        const phoneLast10 = phoneDigits.slice(-10);
+
+        const contact = contacts.find((c) => {
+          const cDigits = onlyDigits(c.phone);
+          return cDigits === phoneDigits || (phoneLast10 && cDigits.endsWith(phoneLast10));
+        });
+        if (!contact) continue;
+
+        const { error: createAppointmentError } = await supabase
+          .from('appointments')
+          .insert({
+            tenant_id: req.tenantId,
+            contact_id: contact.id,
+            service_id: firstService.id,
+            user_id: req.userId,
+            scheduled_at: new Date(event.start).toISOString(),
+            status: event.status || 'pending',
+            google_event_id: event.id,
+          });
+
+        if (createAppointmentError) throw createAppointmentError;
+        syncedIds.add(event.id);
+      }
+    }
 
     return res.json({ success: true, data, connected: true });
   } catch (err) { return next(err); }
@@ -140,7 +278,7 @@ async function remindEvent(req, res, next) {
     const event = await getCalendarEvent(accessToken, eventId);
     if (!event) throw new AppError('Evento no encontrado', 404);
 
-    const phone = (event.summary || '').match(PHONE_REGEX)?.[0]?.replace(/[\s()-]/g, '');
+    const phone = extractPhoneFromSummary(event.summary || '');
     if (!phone) throw new AppError('No se encontró número de teléfono en el título del evento', 400);
 
     const start = event.start?.dateTime || (event.start?.date ? `${event.start.date}T12:00:00` : null);
@@ -157,11 +295,8 @@ async function remindEvent(req, res, next) {
     if (appointment?.contact?.name) {
       clientName = appointment.contact.name;
     } else {
-      // Fallback: extract name from event title (strip phone and status suffix)
-      clientName = (event.summary || 'Cliente')
-        .replace(PHONE_REGEX, '')
-        .replace(/\s*-\s*(CONFIRMADO|CANCELADO)$/i, '')
-        .trim() || 'Cliente';
+      // Fallback: take only text before phone number in event title
+      clientName = extractClientName(event.summary || '');
     }
 
     // Format date and time

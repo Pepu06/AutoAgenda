@@ -1,4 +1,4 @@
-const { prisma, supabase } = require('@recordai/db');
+const { supabase } = require('@recordai/db');
 const { getCalendarEvent, updateEventTitleAndColor, refreshAccessToken } = require('../services/google');
 const env = require('../config/env');
 const logger = require('../config/logger');
@@ -18,10 +18,7 @@ function verify(req, res) {
 async function receive(req, res) {
   try {
     const body = req.body;
-
-    if (body.object !== 'whatsapp_business_account') {
-      return res.sendStatus(404);
-    }
+    logger.info({ object: body?.object }, '[Webhook] Incoming payload');
 
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
@@ -49,65 +46,101 @@ function parseIntent(text) {
   return null;
 }
 
+function onlyDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+async function findPendingAppointmentByPhone(phone) {
+  const phoneDigits = onlyDigits(phone);
+  const phoneLast10 = phoneDigits.slice(-10);
+
+  // Match contacts by last 10 digits to avoid format issues (+54, 549, spaces, etc.)
+  const { data: contacts, error: contactsError } = await supabase
+    .from('contacts')
+    .select('id, phone')
+    .ilike('phone', `%${phoneLast10}`)
+    .limit(50);
+
+  console.log(contacts);
+  if (contactsError) throw contactsError;
+
+  if (!contacts?.length) return null;
+
+  const matchedContact = contacts.find((c) => onlyDigits(c.phone).endsWith(phoneLast10));
+  if (!matchedContact) return null;
+
+  const { data: appointment, error: appointmentError } = await supabase
+    .from('appointments')
+    .select('id, tenant_id, google_event_id, user_id, contact_id')
+    .eq('contact_id', matchedContact.id)
+    .eq('status', 'pending')
+    .order('scheduled_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (appointmentError) throw appointmentError;
+
+  return appointment || null;
+}
+
 async function processMessage(message, _metadata) {
   const from = message.from;
   let rawText = null;
 
   if (message.type === 'interactive' && message.interactive?.button_reply) {
-    rawText = message.interactive.button_reply.id;
+    rawText = message.interactive.button_reply.id
+      || message.interactive.button_reply.title
+      || null;
+  } else if (message.type === 'button') {
+    rawText = message.button?.payload
+      || message.button?.text
+      || null;
   } else if (message.type === 'text') {
     rawText = message.text?.body?.trim();
   }
 
+  logger.info({ from, type: message.type, rawText }, '[Webhook] Parsed inbound message');
+
+  if (!rawText) {
+    logger.info({ from, type: message.type }, '[Webhook] Ignored message without text/button payload');
+    return;
+  }
+
   const intent = parseIntent(rawText);
-  if (!intent) return;
+  if (!intent) {
+    logger.info({ from, rawText }, '[Webhook] Ignored message without valid intent');
+    return;
+  }
 
   // Meta sends phone without '+'; DB stores E.164 with '+'
   const phone = from.startsWith('+') ? from : `+${from}`;
-
   logger.info({ phone, intent }, '[Webhook] Processing intent');
 
-  // Find contact by phone
-  const contact = await prisma.contact.findFirst({
-    where: { phone },
-    include: {
-      appointments: {
-        where: { status: 'pending' },
-        orderBy: { scheduledAt: 'asc' },
-        take: 1,
-        include: { tenant: true },
-      },
-    },
-  });
-
-  if (!contact) {
+  const appointment = await findPendingAppointmentByPhone(phone);
+  if (!appointment) {
     logger.warn({ phone }, '[Webhook] Contact not found');
     return;
   }
-  if (contact.appointments.length === 0) {
-    logger.warn({ phone, contactId: contact.id }, '[Webhook] No pending appointments for contact');
-    return;
-  }
-
-  const appointment = contact.appointments[0];
   const newStatus = intent === 'confirm' ? 'confirmed' : 'cancelled';
 
   // Update appointment status in DB
-  await prisma.appointment.update({
-    where: { id: appointment.id },
-    data: { status: newStatus },
-  });
+  const { error: updateError } = await supabase
+    .from('appointments')
+    .update({ status: newStatus })
+    .eq('id', appointment.id);
+  if (updateError) throw updateError;
 
-  await prisma.messageLog.create({
-    data: {
-      tenantId:      appointment.tenantId,
-      appointmentId: appointment.id,
-      type:          'reply',
-      direction:     'inbound',
-      status:        'delivered',
-      waMessageId:   message.id,
-    },
-  });
+  const { error: logError } = await supabase
+    .from('message_logs')
+    .insert({
+      tenant_id: appointment.tenant_id,
+      appointment_id: appointment.id,
+      type: 'reply',
+      direction: 'inbound',
+      status: 'delivered',
+      wa_message_id: message.id,
+    });
+  if (logError) throw logError;
 
   logger.info({ appointmentId: appointment.id, status: newStatus }, 'Appointment status updated via WhatsApp');
 

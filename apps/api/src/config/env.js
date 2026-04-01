@@ -19,6 +19,7 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID:      z.string().min(1),
   GOOGLE_CLIENT_SECRET:  z.string().min(1),
   BASE_URL:              z.string().url().optional().default('http://localhost:3001'),
+  CORS_ORIGIN:           z.string().optional().default('http://localhost:3000'),
   WASENDER_API_KEY:      z.string().optional().default(''),
   WASENDER_TEST_EMAIL:   z.string().optional().default('pedrogonzalezsoro@gmail.com'),
 });
