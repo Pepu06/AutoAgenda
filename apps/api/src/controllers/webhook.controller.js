@@ -55,6 +55,7 @@ async function findPendingAppointmentByPhone(phone) {
   const phoneDigits = onlyDigits(phone);
   const phoneLast10 = phoneDigits.slice(-10);
 
+  // Match contacts by last 10 digits to avoid format issues (+54, 549, spaces, etc.)
   const { data: contacts, error: contactsError } = await supabase
     .from('contacts')
     .select('id, phone')
@@ -62,21 +63,17 @@ async function findPendingAppointmentByPhone(phone) {
     .limit(50);
 
   if (contactsError) throw contactsError;
+
   if (!contacts?.length) return null;
 
   const matchedContact = contacts.find((c) => onlyDigits(c.phone).endsWith(phoneLast10));
   if (!matchedContact) return null;
-
-  // Look for the nearest upcoming appointment (or one from the last 48h)
-  // Include cancelled so users can reverse a mistaken button press
-  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
   const { data: appointment, error: appointmentError } = await supabase
     .from('appointments')
     .select('id, tenant_id, google_event_id, user_id, contact_id')
     .eq('contact_id', matchedContact.id)
     .in('status', ['pending', 'confirmed', 'cancelled'])
-    .gte('scheduled_at', cutoff)
     .order('scheduled_at', { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -152,7 +149,7 @@ async function processMessage(message, _metadata) {
     try {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('admin_whatsapp, admin_alerts_enabled, admin_cancel_template, timezone')
+        .select('admin_whatsapp, admin_cancel_template, timezone')
         .eq('id', appointment.tenant_id)
         .single();
 
@@ -165,11 +162,9 @@ async function processMessage(message, _metadata) {
 
         const tz = tenant.timezone || 'America/Argentina/Buenos_Aires';
         const apptDate = new Date(fullAppt.scheduled_at);
-        logger.info({ appointmentId: appointment.id, scheduled_at: fullAppt.scheduled_at, tz, service: fullAppt.service?.name }, 'Admin cancel alert data');
         const dateStr = apptDate.toLocaleDateString('es-AR', { timeZone: tz, weekday: 'long', day: '2-digit', month: '2-digit' });
         const timeStr = apptDate.toLocaleTimeString('es-AR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
 
-        // Strip +549 prefix so template can prepend it: "+549{{2}}"
         const rawPhone = fullAppt.contact.phone.replace(/^\+?549?/, '');
 
         const templateName = tenant.admin_cancel_template || env.WHATSAPP_TEMPLATE_CANCEL_ALERT;

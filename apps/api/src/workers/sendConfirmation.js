@@ -1,5 +1,5 @@
 const { supabase } = require('@recordai/db');
-const { sendTemplate } = require('../services/whatsapp');
+const { sendInteractiveButtons } = require('../services/whatsapp');
 const logger = require('../config/logger');
 
 async function sendConfirmation({ appointmentId }) {
@@ -19,30 +19,22 @@ async function sendConfirmation({ appointmentId }) {
     return;
   }
 
-  const tz = appointment.tenant?.timezone || 'America/Argentina/Buenos_Aires';
-  const dateObj = new Date(appointment.scheduled_at);
-  const fechaLabel = dateObj.toLocaleDateString('es-AR', {
-    timeZone: tz,
-    weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
-  });
-  const horaLabel = dateObj.toLocaleTimeString('es-AR', {
-    timeZone: tz,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
+  const date = new Date(appointment.scheduled_at).toLocaleString('es-AR', {
+    dateStyle: 'full',
+    timeStyle: 'short',
   });
 
-  await sendTemplate(appointment.contact.phone, 'recordatorio_turno', {
-    header: [{ name: 'encabezado', value: appointment.tenant?.business_name || 'RecordAI' }],
-    body: [
-      { name: 'nombre_cliente', value: appointment.contact.name },
-      { name: 'mensaje_editable', value: (appointment.tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ') },
-      { name: 'fecha', value: fechaLabel },
-      { name: 'hora', value: horaLabel },
-    ],
-  });
+  const body =
+    `Hola ${appointment.contact.name}! 👋\n\n` +
+    `Tienes una cita programada:\n` +
+    `📅 ${date}\n` +
+    `💼 ${appointment.service.name}\n\n` +
+    `¿Podés confirmar tu asistencia?`;
+
+  await sendInteractiveButtons(appointment.contact.phone, body, [
+    { id: 'confirm', title: '✅ Confirmar' },
+    { id: 'cancel',  title: '❌ Cancelar'  },
+  ]);
 
   await supabase.from('appointments').update({ confirmation_sent_at: new Date().toISOString() }).eq('id', appointmentId);
 
