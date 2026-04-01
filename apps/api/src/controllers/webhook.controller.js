@@ -203,19 +203,25 @@ async function processMessage(message, _metadata) {
       .eq('id', apptData.user_id)
       .single();
 
-    if (!userData?.google_access_token) return;
+    if (!userData?.google_access_token && !userData?.google_refresh_token) return;
 
     let accessToken = userData.google_access_token;
 
-    const event = await getCalendarEvent(accessToken, apptData.google_event_id);
-    if (!event && userData.google_refresh_token) {
-      // Token expired — refresh and retry
-      accessToken = await refreshAccessToken(userData.google_refresh_token);
-      await supabase.from('users').update({ google_access_token: accessToken }).eq('id', apptData.user_id);
+    // Always refresh if we have a refresh token — access tokens expire in 1h
+    if (userData.google_refresh_token) {
+      try {
+        accessToken = await refreshAccessToken(userData.google_refresh_token);
+        await supabase.from('users').update({ google_access_token: accessToken }).eq('id', apptData.user_id);
+      } catch (refreshErr) {
+        logger.warn({ refreshErr }, 'Failed to refresh Google token, using stored access token');
+      }
     }
 
-    const calEvent = event || await getCalendarEvent(accessToken, apptData.google_event_id);
-    if (!calEvent) return;
+    const calEvent = await getCalendarEvent(accessToken, apptData.google_event_id);
+    if (!calEvent) {
+      logger.warn({ appointmentId: appointment.id, googleEventId: apptData.google_event_id }, 'Calendar event not found for status update');
+      return;
+    }
 
     const STATUS_SUFFIX = { confirmed: 'CONFIRMADO', cancelled: 'CANCELADO' };
     const baseTitle = (calEvent.summary || '').replace(/\s*-\s*(CONFIRMADO|CANCELADO)$/i, '').trim();

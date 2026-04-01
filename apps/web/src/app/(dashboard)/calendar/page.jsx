@@ -106,6 +106,8 @@ export default function CalendarPage() {
   const connectCalendar = useGoogleLogin({
     flow: 'auth-code',
     scope: 'https://www.googleapis.com/auth/calendar.events',
+    access_type: 'offline',
+    prompt: 'consent',
     onSuccess: async ({ code }) => {
       await api.post('/calendar/connect', { code });
       setConnected(true);
