@@ -239,7 +239,12 @@ async function confirmByAppointmentId(req, res) {
 
   const tz = appointment.tenant?.timezone || 'America/Argentina/Buenos_Aires';
   const dateObj = new Date(appointment.scheduled_at);
-  const eventTime = dateObj.toLocaleString('es-AR', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' });
+  const eventTime = dateObj.toLocaleString('es-AR', {
+    timeZone: tz,
+    dateStyle: 'full',
+    timeStyle: 'short',
+    hour12: false,
+  });
 
   if (appointment.status === 'confirmed') {
     return res.send(renderPage('Turno confirmado', `
@@ -289,7 +294,7 @@ async function processAppointmentAction(req, res) {
   if (appointment.status === estado) {
     const icon    = estado === 'confirmed' ? '🎉' : '👋';
     const heading = estado === 'confirmed' ? '¡Turno confirmado!' : 'Turno cancelado';
-    return res.send(renderPage(heading, `<div class="status-icon">${icon}</div><h1>${heading}</h1><p>Ya procesamos tu respuesta anteriormente.</p>`));
+    return res.send(renderPage(heading, `<div class="status-icon">${icon}</div><h1>${heading}</h1><p>Ya procesamos tu respuesta.</p>`));
   }
 
   await supabase

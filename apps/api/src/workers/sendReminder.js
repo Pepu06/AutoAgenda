@@ -4,6 +4,12 @@ const logger = require('../config/logger');
 const { appointmentsQueue } = require('./queue');
 const { JobName } = require('@recordai/shared');
 
+function hasReminderConfig(tenant) {
+  const businessName = String(tenant?.business_name || '').trim();
+  const messageTemplate = String(tenant?.message_template || '').trim();
+  return Boolean(businessName && messageTemplate);
+}
+
 async function sendReminder({ appointmentId }) {
   const { data: appointment } = await supabase
     .from('appointments')
@@ -18,6 +24,11 @@ async function sendReminder({ appointmentId }) {
 
   if (appointment.status === 'cancelled') {
     logger.info({ appointmentId }, 'Skipping reminder, appointment cancelled');
+    return;
+  }
+
+  if (!hasReminderConfig(appointment.tenant)) {
+    logger.warn({ appointmentId, tenantId: appointment.tenant_id }, 'Skipping recordatorio_turno: missing business_name or message_template');
     return;
   }
 

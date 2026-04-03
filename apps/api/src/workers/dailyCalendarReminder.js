@@ -6,6 +6,12 @@ const { formatTime } = require('../utils/datetime');
 const { appointmentsQueue } = require('./queue');
 const { JobName } = require('@recordai/shared');
 
+function hasReminderConfig(tenant) {
+  const businessName = String(tenant?.business_name || '').trim();
+  const messageTemplate = String(tenant?.message_template || '').trim();
+  return Boolean(businessName && messageTemplate);
+}
+
 function getReminderDateTimeUTC(scheduledAt, timezone, reminderType, reminderTime) {
   const [hh, mm] = (reminderTime || '10:00').split(':').map(Number);
   const appt = new Date(scheduledAt);
@@ -57,6 +63,10 @@ async function runDailyReminders() {
 
   for (const appt of appointments || []) {
     if (!appt?.contact?.phone) continue;
+    if (!hasReminderConfig(appt?.tenant)) {
+      logger.warn({ appointmentId: appt?.id, tenantId: appt?.tenant_id }, 'Skipping daily recordatorio_turno: missing business_name or message_template');
+      continue;
+    }
 
     const tz = appt.tenant?.timezone || 'America/Argentina/Buenos_Aires';
     const timeFormat = appt.tenant?.time_format || '24h';

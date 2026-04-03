@@ -3,10 +3,16 @@ const { sendTemplate } = require('../services/whatsapp');
 const logger = require('../config/logger');
 const { formatTime } = require('../utils/datetime');
 
+function hasReminderConfig(tenant) {
+  const businessName = String(tenant?.business_name || '').trim();
+  const messageTemplate = String(tenant?.message_template || '').trim();
+  return Boolean(businessName && messageTemplate);
+}
+
 async function sendFollowUp({ appointmentId }) {
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('*, contact:contacts(*), service:services(*), tenant:tenants(timezone, time_format, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key)')
+    .select('*, contact:contacts(*), service:services(*), tenant:tenants(timezone, time_format, business_name, message_template, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key)')
     .eq('id', appointmentId)
     .maybeSingle();
 
@@ -21,6 +27,11 @@ async function sendFollowUp({ appointmentId }) {
     return;
   }
 
+  if (!hasReminderConfig(appointment.tenant)) {
+    logger.warn({ appointmentId, tenantId: appointment.tenant_id }, 'Skipping recordatorio_turno follow-up: missing business_name or message_template');
+    return;
+  }
+
   const tz = appointment.tenant?.timezone || 'America/Argentina/Buenos_Aires';
   const dateObj = new Date(appointment.scheduled_at);
   const date = dateObj.toLocaleDateString('es-AR', {
@@ -31,7 +42,7 @@ async function sendFollowUp({ appointmentId }) {
   });
   const time = formatTime(dateObj, { timeZone: tz, timeFormat: appointment.tenant?.time_format });
 
-  const encabezado = 'Seguimiento de turno';
+  const encabezado = appointment.tenant?.business_name;
   const mensajeEditable = `Aún no confirmaste tu cita del ${date} ${time}.`;
 
   const tenantConfig = {

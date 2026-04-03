@@ -56,6 +56,14 @@ function extractClientName(summary = '') {
     .trim() || 'Cliente';
 }
 
+function hasReminderConfig(tenant) {
+  const businessName = String(tenant?.business_name || '').trim();
+  const messageTemplate = String(tenant?.message_template || '').trim();
+  return Boolean(businessName && messageTemplate);
+}
+
+const REMINDER_CONFIG_ERROR = 'Completá Nombre del negocio y Mensaje personalizable en Configuración para poder crear citas y enviar recordatorios.';
+
 async function getValidToken(userId) {
   const { data: user } = await supabase
     .from('users').select('google_access_token, google_refresh_token').eq('id', userId).single();
@@ -113,6 +121,15 @@ async function events(req, res, next) {
     const accessToken = await getValidToken(req.userId);
     if (!accessToken) return res.json({ success: true, data: [], connected: false });
 
+    const { data: tenantSettings, error: tenantSettingsError } = await supabase
+      .from('tenants')
+      .select('business_name, message_template')
+      .eq('id', req.tenantId)
+      .single();
+    if (tenantSettingsError) throw tenantSettingsError;
+
+    const canCreateAppointments = hasReminderConfig(tenantSettings);
+
     const items = await getCalendarEvents(accessToken, { days: 30 }) || [];
 
     // Fetch DB appointments to use as authoritative status source
@@ -165,7 +182,7 @@ async function events(req, res, next) {
     let contacts = [];
 
     // Ensure contacts exist for calendar events with phone
-    if (data.length) {
+    if (data.length && canCreateAppointments) {
       const { data: existingContacts, error: contactsError } = await supabase
         .from('contacts')
         .select('id, name, phone')
@@ -292,7 +309,16 @@ async function events(req, res, next) {
       }
     }
 
-    return res.json({ success: true, data, connected: true });
+    if (!canCreateAppointments) {
+      logger.warn({ tenantId: req.tenantId }, 'Skipping calendar sync appointment creation: missing business_name or message_template');
+    }
+
+    return res.json({
+      success: true,
+      data,
+      connected: true,
+      ...(canCreateAppointments ? {} : { warning: REMINDER_CONFIG_ERROR }),
+    });
   } catch (err) { return next(err); }
 }
 
@@ -362,6 +388,8 @@ async function remindEvent(req, res, next) {
       .eq('id', req.tenantId)
       .single();
 
+    if (!hasReminderConfig(tenant)) throw new AppError(REMINDER_CONFIG_ERROR, 400);
+
     // Format date and time
     const dateObj = start ? new Date(start) : null;
     const tenantTz = tenant?.timezone || 'America/Argentina/Buenos_Aires';
@@ -380,7 +408,7 @@ async function remindEvent(req, res, next) {
       })
       : '';
 
-    const encabezado = tenant?.business_name || 'RecordAI';
+    const encabezado = tenant?.business_name;
     const mensajeEditable = (tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ');
 
     const tenantConfig = {
@@ -432,6 +460,14 @@ async function createEvent(req, res, next) {
   try {
     const { contactId, serviceId, scheduledAt, notes } = req.body;
 
+    const { data: tenantSettings, error: tenantSettingsError } = await supabase
+      .from('tenants')
+      .select('business_name, message_template, timezone, reminder_type, reminder_time')
+      .eq('id', req.tenantId)
+      .single();
+    if (tenantSettingsError) throw tenantSettingsError;
+    if (!hasReminderConfig(tenantSettings)) throw new AppError(REMINDER_CONFIG_ERROR, 400);
+
     const [{ data: contact }, { data: service }] = await Promise.all([
       supabase.from('contacts').select('id, name, phone, email').eq('id', contactId).eq('tenant_id', req.tenantId).single(),
       supabase.from('services').select('id, name, duration_minutes').eq('id', serviceId).eq('tenant_id', req.tenantId).single(),
@@ -479,8 +515,7 @@ async function createEvent(req, res, next) {
 
     queueJob(JobName.SEND_CONFIRMATION);
 
-    const { data: tenant } = await supabase.from('tenants').select('timezone, reminder_type, reminder_time').eq('id', req.tenantId).single();
-    const reminderDelay = calcReminderDelay(scheduledAt, tenant?.timezone, tenant?.reminder_type, tenant?.reminder_time);
+    const reminderDelay = calcReminderDelay(scheduledAt, tenantSettings?.timezone, tenantSettings?.reminder_type, tenantSettings?.reminder_time);
     if (reminderDelay > 0) queueJob(JobName.SEND_REMINDER, { delay: reminderDelay });
 
     return res.status(201).json({ success: true, data: convertKeys(appointment) });

@@ -1,10 +1,17 @@
 const { supabase, convertKeys } = require('@recordai/db');
-const { NotFoundError } = require('../errors');
+const { AppError, NotFoundError } = require('../errors');
 const { appointmentsQueue } = require('../workers/queue');
 const { JobName } = require('@recordai/shared');
 const { updateEventColor, refreshAccessToken, getCalendarEvents } = require('../services/google');
 
 const APPOINTMENT_SELECT = '*, contact:contacts(*), service:services(*), user:users(*)';
+const REMINDER_CONFIG_ERROR = 'Completá Nombre del negocio y Mensaje personalizable en Configuración para poder crear citas y enviar recordatorios.';
+
+function hasReminderConfig(tenant) {
+  const businessName = String(tenant?.business_name || '').trim();
+  const messageTemplate = String(tenant?.message_template || '').trim();
+  return Boolean(businessName && messageTemplate);
+}
 
 async function list(req, res, next) {
   try {
@@ -54,6 +61,14 @@ async function create(req, res, next) {
   try {
     const { contactId, serviceId, scheduledAt, notes } = req.body;
 
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .select('business_name, message_template, timezone, reminder_type, reminder_time')
+      .eq('id', req.tenantId)
+      .single();
+    if (tenantError) throw tenantError;
+    if (!hasReminderConfig(tenant)) throw new AppError(REMINDER_CONFIG_ERROR, 400);
+
     const { data, error } = await supabase
       .from('appointments')
       .insert({
@@ -75,12 +90,6 @@ async function create(req, res, next) {
     queueJob(JobName.SEND_CONFIRMATION);
 
     // Fetch tenant settings to calculate reminder timing
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('timezone, reminder_type, reminder_time')
-      .eq('id', req.tenantId)
-      .single();
-
     const reminderDelay = calcReminderDelay(
       scheduledAt,
       tenant?.timezone || 'UTC',
