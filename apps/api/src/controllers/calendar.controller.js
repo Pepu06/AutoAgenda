@@ -1,4 +1,5 @@
 const { supabase, convertKeys } = require('@recordai/db');
+const logger = require('../config/logger');
 const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor, createCalendarEvent } = require('../services/google');
 const { sendTemplate } = require('../services/whatsapp');
 const { appointmentsQueue } = require('../workers/queue');
@@ -215,24 +216,31 @@ async function events(req, res, next) {
         allServices = [createdService];
       }
 
-      // Match event description to a service name
-      // Looks for service in parentheses first: (Servicio nombre)
-      // Falls back to case-insensitive substring match
-      // Returns default service if no match
-      function matchService(description = '') {
+      // Match event description to a service from parentheses: (Service Name)
+      // If found in parentheses but doesn't exist → create it.
+      // If no parentheses → use default service.
+      async function matchService(description = '') {
         if (!description) return allServices[0];
-        
-        // Try to extract service from parentheses: (Service Name)
+
         const parenMatch = description.match(/\(([^)]+)\)/);
-        if (parenMatch) {
-          const serviceInParen = parenMatch[1].trim().toLowerCase();
-          const matched = allServices.find(s => s.name.toLowerCase() === serviceInParen);
-          if (matched) return matched;
+        if (!parenMatch) return allServices[0];
+
+        const serviceName = parenMatch[1].trim();
+        const matched = allServices.find(s => s.name.toLowerCase() === serviceName.toLowerCase());
+        if (matched) return matched;
+
+        // Create service on the fly
+        const { data: created, error: createErr } = await supabase
+          .from('services')
+          .insert({ tenant_id: req.tenantId, name: serviceName, duration_minutes: 30, price: 0 })
+          .select('id, name')
+          .single();
+        if (createErr) {
+          logger.warn({ createErr, serviceName }, 'Failed to create service from description, using default');
+          return allServices[0];
         }
-        
-        // Fallback: search for any service name in the description
-        const desc = description.toLowerCase();
-        return allServices.find(s => desc.includes(s.name.toLowerCase())) || allServices[0];
+        allServices.push(created);
+        return created;
       }
 
       // Ensure appointments exist for calendar events with phone
@@ -248,7 +256,7 @@ async function events(req, res, next) {
         });
         if (!contact) continue;
 
-        const service = matchService(event.description);
+        const service = await matchService(event.description);
 
         const { data: newAppointment, error: createAppointmentError } = await supabase
           .from('appointments')

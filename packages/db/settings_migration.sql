@@ -22,8 +22,7 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS wasender_template TEXT;
 
 -- Daily report configuration
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS report_days TEXT DEFAULT '1,2,3,4,5';
-ALTER TABLE tenants ADD COLUMN IF NOT EXISTS report_morning_time TEXT DEFAULT '08:00';
-ALTER TABLE tenants ADD COLUMN IF NOT EXISTS report_evening_time TEXT DEFAULT '20:00';
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS report_type TEXT DEFAULT 'morning';
 
 -- Users: ensure Google OAuth columns exist
 ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT;

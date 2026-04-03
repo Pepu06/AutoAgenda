@@ -69,7 +69,7 @@ async function checkDailyReports() {
 
   const { data: tenants, error } = await supabase
     .from('tenants')
-    .select('id, timezone, report_days, report_morning_time, report_evening_time, admin_whatsapp')
+    .select('id, timezone, report_days, report_type, admin_daily_report_time, admin_whatsapp')
     .not('admin_whatsapp', 'is', null);
 
   if (error) {
@@ -79,36 +79,19 @@ async function checkDailyReports() {
 
   for (const tenant of tenants || []) {
     const tz = tenant.timezone || 'America/Argentina/Buenos_Aires';
-    
-    // Check if today is in the configured report days
-    if (!isTodayInReportDays(tenant.report_days)) {
-      continue;
-    }
+    const reportType = tenant.report_type || 'morning';
+    const reportTime = tenant.admin_daily_report_time;
 
-    // Check morning report
-    if (tenant.report_morning_time) {
-      if (isValidReportTime(tenant.report_morning_time, 'morning') && 
-          isTimeMatch(tenant.report_morning_time, tz)) {
-        try {
-          await sendDailyReport({ tenantId: tenant.id, reportType: 'morning' });
-          logger.info({ tenantId: tenant.id, time: tenant.report_morning_time }, 'Morning report sent');
-        } catch (err) {
-          logger.error({ tenantId: tenant.id, err: err.message }, 'Failed to send morning report');
-        }
-      }
-    }
+    if (!reportTime) continue;
+    if (!isTodayInReportDays(tenant.report_days)) continue;
+    if (!isValidReportTime(reportTime, reportType)) continue;
+    if (!isTimeMatch(reportTime, tz)) continue;
 
-    // Check evening report
-    if (tenant.report_evening_time) {
-      if (isValidReportTime(tenant.report_evening_time, 'evening') && 
-          isTimeMatch(tenant.report_evening_time, tz)) {
-        try {
-          await sendDailyReport({ tenantId: tenant.id, reportType: 'evening' });
-          logger.info({ tenantId: tenant.id, time: tenant.report_evening_time }, 'Evening report sent');
-        } catch (err) {
-          logger.error({ tenantId: tenant.id, err: err.message }, 'Failed to send evening report');
-        }
-      }
+    try {
+      await sendDailyReport({ tenantId: tenant.id, reportType });
+      logger.info({ tenantId: tenant.id, reportType, time: reportTime }, 'Daily report sent');
+    } catch (err) {
+      logger.error({ tenantId: tenant.id, err: err.message }, 'Failed to send daily report');
     }
   }
 
