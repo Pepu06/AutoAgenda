@@ -15,7 +15,7 @@ async function sendConfirmation({ appointmentId }) {
     return;
   }
 
-  if (appointment.status !== 'pending') {
+  if (appointment.status !== 'notified') {
     logger.info({ appointmentId, status: appointment.status }, 'Skipping confirmation, not pending');
     return;
   }
@@ -35,6 +35,7 @@ async function sendConfirmation({ appointmentId }) {
   const reminderType = appointment.tenant?.reminder_type || 'day_before';
   const recordatorioTexto = reminderType === 'same_day' ? 'el mismo día' : 'el día anterior';
 
+  
   await sendTemplate(appointment.contact.phone, 'confirmacion_turno', {
     body: [
       appointment.contact.name,        // {{1}} nombre del paciente

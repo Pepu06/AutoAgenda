@@ -73,7 +73,7 @@ async function getCalendarEvents(accessToken, { days = 30 } = {}) {
 // Google Calendar color IDs by appointment status
 const STATUS_COLORS = {
   pending:   '5',  // Banana  (yellow)
-  notified:  '5',  // Banana  (yellow) — same as pending, confirmation sent
+  notified:  '9',  // Blueberry (blue)
   confirmed: '2',  // Sage    (green)
   cancelled: '11', // Tomato  (red)
 };

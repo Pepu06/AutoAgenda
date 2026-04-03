@@ -6,13 +6,10 @@ import styles from './appointments.module.css';
 import tableStyles from '../../../components/appointments/AppointmentTable.module.css';
 
 const STATUS_CONFIG = {
-  null:      { label: 'Sin enviar', color: 'var(--text-3)',  bg: 'var(--surface-3)' },
   pending:   { label: 'Pendiente',  color: 'var(--yellow)',  bg: 'var(--yellow-bg)' },
   notified:  { label: 'Notificado', color: 'var(--blue)',    bg: 'var(--blue-bg)' },
   confirmed: { label: 'Confirmado', color: 'var(--green)',   bg: 'var(--green-bg)' },
   cancelled: { label: 'Cancelado',  color: 'var(--red)',     bg: 'var(--red-bg)' },
-  completed: { label: 'Completado', color: 'var(--accent)',  bg: 'var(--accent-bg)' },
-  no_show:   { label: 'No asistió', color: 'var(--gray)',    bg: 'var(--gray-bg)' },
 };
 
 export default function AppointmentsPage() {
@@ -69,11 +66,10 @@ export default function AppointmentsPage() {
           className={styles.filterInput}
         >
           <option value="">Todos los estados</option>
+          <option value="notified">Notificado</option>
           <option value="pending">Pendiente</option>
           <option value="confirmed">Confirmado</option>
           <option value="cancelled">Cancelado</option>
-          <option value="completed">Completado</option>
-          <option value="no_show">No asistió</option>
         </select>
         {(filterDate || filterStatus) && (
           <button className={styles.btnClear} onClick={() => { setFilterDate(''); setFilterStatus(''); }}>
@@ -136,11 +132,10 @@ export default function AppointmentsPage() {
                         className={tableStyles.select}
                       >
                         <option value="">Sin enviar</option>
+                        <option value="notified">Notificado</option>
                         <option value="pending">Pendiente</option>
                         <option value="confirmed">Confirmado</option>
                         <option value="cancelled">Cancelado</option>
-                        <option value="completed">Completado</option>
-                        <option value="no_show">No asistió</option>
                       </select>
                     </td>
                   </tr>

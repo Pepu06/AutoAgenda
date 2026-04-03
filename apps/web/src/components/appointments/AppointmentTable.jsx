@@ -3,11 +3,10 @@
 import styles from './AppointmentTable.module.css';
 
 const STATUS_CONFIG = {
-  pending:   { label: 'Pendiente',  color: 'var(--orange)', bg: 'var(--orange-bg)' },
-  confirmed: { label: 'Confirmado', color: 'var(--accent)',  bg: 'var(--accent-bg)' },
-  cancelled: { label: 'Cancelado',  color: 'var(--red)',    bg: 'var(--red-bg)' },
-  completed: { label: 'Completado', color: 'var(--blue)',   bg: 'var(--blue-bg)' },
-  no_show:   { label: 'No asistió', color: 'var(--gray)',   bg: 'var(--gray-bg)' },
+  pending:   { label: 'Pendiente',  color: 'var(--yellow)',  bg: 'var(--yellow-bg)' },
+  notified:  { label: 'Notificado', color: 'var(--blue)',    bg: 'var(--blue-bg)' },
+  confirmed: { label: 'Confirmado', color: 'var(--green)',   bg: 'var(--green-bg)' },
+  cancelled: { label: 'Cancelado',  color: 'var(--red)',     bg: 'var(--red-bg)' },
 };
 
 export default function AppointmentTable({ appointments, onStatusChange }) {

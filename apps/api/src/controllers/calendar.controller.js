@@ -269,7 +269,7 @@ async function events(req, res, next) {
             service_id: service.id,
             user_id: req.userId,
             scheduled_at: new Date(event.start).toISOString(),
-            status: event.status || 'pending',
+            status: event.status || '',
             google_event_id: event.id,
           })
           .select('id, scheduled_at')
