@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { isAuthenticated, clearAuth, getToken } from '../../lib/auth';
 import styles from './dashboard.module.css';
@@ -78,14 +78,35 @@ const navItems = [
 export default function DashboardLayout({ children }) {
   const router   = useRouter();
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('sidebar_collapsed') === 'true';
-  });
+  const [collapsed, setCollapsed] = useState(false);
+  const [profile, setProfile] = useState({ initials: 'MN', businessName: 'Mi Negocio', profilePicture: null });
 
   useEffect(() => {
     if (!isAuthenticated()) router.replace('/login');
   }, [router]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setCollapsed(localStorage.getItem('sidebar_collapsed') === 'true');
+    }
+
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const business = payload.tenantName || payload.email?.split('@')[0] || 'Mi Negocio';
+      const picture = payload.picture || null;
+
+      setProfile({
+        initials: business.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
+        businessName: business,
+        profilePicture: picture,
+      });
+    } catch {
+      setProfile({ initials: 'MN', businessName: 'Mi Negocio', profilePicture: null });
+    }
+  }, []);
 
   function handleLogout() {
     clearAuth();
@@ -100,20 +121,7 @@ export default function DashboardLayout({ children }) {
     });
   }
 
-  const { initials, businessName, profilePicture } = useMemo(() => {
-    try {
-      const token = getToken();
-      if (!token) return { initials: 'MN', businessName: 'Mi Negocio', profilePicture: null };
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const business = payload.tenantName || payload.email?.split('@')[0] || 'Mi Negocio';
-      const picture = payload.picture || null;
-      return {
-        initials: business.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
-        businessName: business,
-        profilePicture: picture,
-      };
-    } catch { return { initials: 'MN', businessName: 'Mi Negocio', profilePicture: null }; }
-  }, []);
+  const { initials, businessName, profilePicture } = profile;
 
   return (
     <div className={styles.layout}>
