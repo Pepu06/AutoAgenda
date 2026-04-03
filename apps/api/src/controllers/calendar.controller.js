@@ -122,7 +122,7 @@ async function events(req, res, next) {
     const syncedIds = new Set((synced || []).map(a => a.google_event_id)); // eslint-disable-line no-unused-vars
     const dbStatusMap = Object.fromEntries((synced || []).map(a => [a.google_event_id, a.status]));
 
-    const COLOR_STATUS = { '5': 'pending', '2': 'confirmed', '11': 'cancelled', '10': 'completed', '8': 'no_show' };
+    const COLOR_STATUS = { '5': 'pending', '2': 'confirmed', '11': 'cancelled' };
 
     const data = items
       .filter(e => e.start?.dateTime || e.start?.date)

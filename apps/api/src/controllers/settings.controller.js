@@ -6,6 +6,7 @@ const ALLOWED_FIELDS = [
   'messaging_enabled', 'message_template',
   'admin_whatsapp', 'admin_alerts_enabled', 'admin_daily_report_time',
   'reminder_type', 'reminder_time', 'admin_cancel_template',
+  'report_days', 'report_morning_time', 'report_evening_time',
 ];
 
 const SELECT_COLS = ['id', 'name', 'slug', ...ALLOWED_FIELDS].join(', ');

@@ -22,11 +22,32 @@ const DEFAULTS = {
   messageTemplate:     '',
   adminWhatsapp:       '',
   adminAlertsEnabled:  false,
-  adminDailyReportTime: '08:00',
+  reportDays:          '1,2,3,4,5',
+  reportMorningTime:   '08:00',
+  reportEveningTime:   '20:00',
   reminderType:        'day_before',
   reminderTime:        '10:00',
   adminCancelTemplate: 'admin_cancelacion',
 };
+
+const WEEK_DAYS = [
+  { value: 1, label: 'Lun' },
+  { value: 2, label: 'Mar' },
+  { value: 3, label: 'Mié' },
+  { value: 4, label: 'Jue' },
+  { value: 5, label: 'Vie' },
+  { value: 6, label: 'Sáb' },
+  { value: 0, label: 'Dom' },
+];
+
+function hoursOptions(min, max) {
+  const opts = [];
+  for (let h = min; h <= max; h++) {
+    const val = `${String(h).padStart(2, '0')}:00`;
+    opts.push(<option key={val} value={val}>{val}</option>);
+  }
+  return opts;
+}
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(DEFAULTS);
@@ -37,10 +58,23 @@ export default function SettingsPage() {
 
   useEffect(() => {
     api.get('/settings').then(res => {
-      setSettings(s => ({
-        ...s,
-        ...Object.fromEntries(Object.entries(res.data).filter(([, v]) => v !== null && v !== undefined)),
-      }));
+      const d = res.data;
+      const mapped = {};
+      if (d.businessName        != null) mapped.businessName        = d.businessName;
+      if (d.contactWhatsapp     != null) mapped.contactWhatsapp     = d.contactWhatsapp;
+      if (d.timezone            != null) mapped.timezone            = d.timezone;
+      if (d.timeFormat          != null) mapped.timeFormat          = d.timeFormat;
+      if (d.messagingEnabled    != null) mapped.messagingEnabled    = d.messagingEnabled;
+      if (d.messageTemplate     != null) mapped.messageTemplate     = d.messageTemplate;
+      if (d.adminWhatsapp       != null) mapped.adminWhatsapp       = d.adminWhatsapp;
+      if (d.adminAlertsEnabled  != null) mapped.adminAlertsEnabled  = d.adminAlertsEnabled;
+      if (d.reportDays          != null) mapped.reportDays          = d.reportDays;
+      if (d.reportMorningTime   != null) mapped.reportMorningTime   = d.reportMorningTime;
+      if (d.reportEveningTime   != null) mapped.reportEveningTime   = d.reportEveningTime;
+      if (d.reminderType        != null) mapped.reminderType        = d.reminderType;
+      if (d.reminderTime        != null) mapped.reminderTime        = d.reminderTime;
+      if (d.adminCancelTemplate != null) mapped.adminCancelTemplate = d.adminCancelTemplate;
+      setSettings(s => ({ ...s, ...mapped }));
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -52,18 +86,20 @@ export default function SettingsPage() {
     setSaving(true); setError(''); setSaved(false);
     try {
       await api.put('/settings', {
-        business_name:           settings.businessName,
-        contact_whatsapp:        settings.contactWhatsapp,
-        timezone:                settings.timezone,
-        time_format:             settings.timeFormat,
-        messaging_enabled:       settings.messagingEnabled,
-        message_template:        settings.messageTemplate,
-        admin_whatsapp:          settings.adminWhatsapp,
-        admin_alerts_enabled:    settings.adminAlertsEnabled,
-        admin_daily_report_time: settings.adminDailyReportTime,
-        reminder_type:           settings.reminderType,
-        reminder_time:           settings.reminderTime,
-        admin_cancel_template:   settings.adminCancelTemplate,
+        business_name:        settings.businessName,
+        contact_whatsapp:     settings.contactWhatsapp,
+        timezone:             settings.timezone,
+        time_format:          settings.timeFormat,
+        messaging_enabled:    settings.messagingEnabled,
+        message_template:     settings.messageTemplate,
+        admin_whatsapp:       settings.adminWhatsapp,
+        admin_alerts_enabled: settings.adminAlertsEnabled,
+        report_days:          settings.reportDays,
+        report_morning_time:  settings.reportMorningTime,
+        report_evening_time:  settings.reportEveningTime,
+        reminder_type:        settings.reminderType,
+        reminder_time:        settings.reminderTime,
+        admin_cancel_template: settings.adminCancelTemplate,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -191,12 +227,13 @@ export default function SettingsPage() {
             </div>
           </Field>
           <Field label="Hora de envío" hint="A qué hora se envía el recordatorio (horario del negocio)">
-            <input
-              type="time"
-              className={`${styles.input} ${styles.inputSm}`}
+            <select
+              className={`${styles.select} ${styles.inputSm}`}
               value={settings.reminderTime}
               onChange={e => set('reminderTime', e.target.value)}
-            />
+            >
+              {hoursOptions(0, 23)}
+            </select>
           </Field>
         </div>
       </section>
@@ -220,9 +257,47 @@ export default function SettingsPage() {
           <Field label="Template de cancelación" hint="Nombre del template de WhatsApp que se envía al admin cuando un turno se cancela">
             <input className={styles.input} value={settings.adminCancelTemplate} onChange={e => set('adminCancelTemplate', e.target.value)} placeholder="admin_cancelacion" />
           </Field>
-          <Field label="Hora del reporte diario" hint="Recibís un resumen de las citas del día a esta hora">
-            <input type="time" className={`${styles.input} ${styles.inputSm}`} value={settings.adminDailyReportTime} onChange={e => set('adminDailyReportTime', e.target.value)} />
+          <Field label="Días del reporte diario" hint="Qué días de la semana se envía el reporte">
+            <div className={styles.dayPicker}>
+              {WEEK_DAYS.map(d => {
+                const active = (settings.reportDays || '').split(',').map(Number).includes(d.value);
+                return (
+                  <button
+                    key={d.value}
+                    type="button"
+                    className={`${styles.dayBtn} ${active ? styles.dayBtnActive : ''}`}
+                    onClick={() => {
+                      const current = (settings.reportDays || '').split(',').map(Number).filter(n => !isNaN(n));
+                      const next = active ? current.filter(v => v !== d.value) : [...current, d.value];
+                      set('reportDays', next.sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b)).join(','));
+                    }}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
           </Field>
+          <div className={styles.row}>
+            <Field label="Hora reporte matutino" hint="6:00 a 10:00 — muestra turnos del día">
+              <select
+                className={`${styles.select} ${styles.inputSm}`}
+                value={settings.reportMorningTime}
+                onChange={e => set('reportMorningTime', e.target.value)}
+              >
+                {hoursOptions(6, 10)}
+              </select>
+            </Field>
+            <Field label="Hora reporte vespertino" hint="20:00 a 00:00 — muestra turnos del día siguiente">
+              <select
+                className={`${styles.select} ${styles.inputSm}`}
+                value={settings.reportEveningTime}
+                onChange={e => set('reportEveningTime', e.target.value)}
+              >
+                {[...hoursOptions(20, 23), <option key="00:00" value="00:00">00:00</option>]}
+              </select>
+            </Field>
+          </div>
         </div>
       </section>
 

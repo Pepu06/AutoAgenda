@@ -9,10 +9,9 @@ const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','A
 
 const STATUS_META = {
   pending:   { label: 'Pendiente',  color: '#f59e0b' },
+  notified:  { label: 'Notificado', color: '#0ea5e9' },
   confirmed: { label: 'Confirmado', color: '#22c55e' },
   cancelled: { label: 'Cancelado',  color: '#ef4444' },
-  completed: { label: 'Completado', color: '#3b82f6' },
-  no_show:   { label: 'No asistió', color: '#64748b' },
 };
 
 function getStatusMeta(status) {

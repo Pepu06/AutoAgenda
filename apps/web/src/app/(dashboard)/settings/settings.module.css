@@ -410,6 +410,34 @@
 
 .phoneBtn:first-child { border-top: none; }
 
+/* Day picker */
+.dayPicker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dayBtn {
+  padding: 7px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-body);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.dayBtn:hover { border-color: var(--border-hover); color: var(--text-2); }
+
+.dayBtnActive {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
 /* ── WasenderAPI section ── */
 .sectionTitleRow {
   display: flex;
