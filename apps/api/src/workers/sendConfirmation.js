@@ -15,8 +15,8 @@ async function sendConfirmation({ appointmentId }) {
     return;
   }
 
-  if (appointment.status !== 'notified') {
-    logger.info({ appointmentId, status: appointment.status }, 'Skipping confirmation, not pending');
+  if (appointment.status === 'notified') {
+    logger.info({ appointmentId, status: appointment.status }, 'Skipping confirmation, already processed');
     return;
   }
 
