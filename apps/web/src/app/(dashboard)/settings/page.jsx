@@ -190,16 +190,7 @@ export default function SettingsPage() {
             </div>
           </Field>
 
-          {settings.whatsappProvider === 'meta' ? (
-            <>
-              <Field label="Phone Number ID" hint="ID del número de teléfono de WhatsApp Business">
-                <input className={styles.input} value={settings.whatsappPhoneNumberId} onChange={e => set('whatsappPhoneNumberId', e.target.value)} placeholder="123456789012345" />
-              </Field>
-              <Field label="Access Token" hint="Token de acceso de la API de Meta">
-                <input className={styles.input} type="password" value={settings.whatsappAccessToken} onChange={e => set('whatsappAccessToken', e.target.value)} placeholder="EAAxxxxxxxxx" />
-              </Field>
-            </>
-          ) : (
+          {settings.whatsappProvider === 'wasender' && (
             <Field label="Wasender Token" hint="Token de API de WasenderAPI">
               <input className={styles.input} type="password" value={settings.wasenderToken} onChange={e => set('wasenderToken', e.target.value)} placeholder="tu_token_wasender" />
             </Field>
