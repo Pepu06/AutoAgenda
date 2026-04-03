@@ -42,8 +42,9 @@ async function sendReminder({ appointmentId }) {
     timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
   });
 
-  const encabezado     = (appointment.tenant?.business_name || 'RecordAI').slice(0, 40);
-  const mensajeEdit    = (appointment.tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ');
+  const encabezado  = (appointment.tenant?.business_name || 'RecordAI').slice(0, 40);
+  const mensajeEdit = (appointment.tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ');
+  const ubicacion   = appointment.tenant?.location || '';
 
   const tenantConfig = {
     provider: appointment.tenant?.whatsapp_provider || 'meta',
@@ -60,6 +61,7 @@ async function sendReminder({ appointmentId }) {
       { name: 'mensaje_editable', value: mensajeEdit },
       { name: 'fecha',            value: fechaLabel },
       { name: 'hora',             value: horaLabel },
+      { name: 'ubicacion',        value: ubicacion },
     ],
     // Embed appointmentId in button payloads so webhook knows exactly which appointment
     buttons: [

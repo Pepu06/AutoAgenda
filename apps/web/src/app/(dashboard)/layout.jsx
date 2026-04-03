@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { isAuthenticated, clearAuth, getToken } from '../../lib/auth';
 import styles from './dashboard.module.css';
@@ -78,6 +78,10 @@ const navItems = [
 export default function DashboardLayout({ children }) {
   const router   = useRouter();
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('sidebar_collapsed') === 'true';
+  });
 
   useEffect(() => {
     if (!isAuthenticated()) router.replace('/login');
@@ -86,6 +90,14 @@ export default function DashboardLayout({ children }) {
   function handleLogout() {
     clearAuth();
     router.push('/login');
+  }
+
+  function toggleCollapse() {
+    setCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('sidebar_collapsed', String(next));
+      return next;
+    });
   }
 
   const { initials, businessName, profilePicture } = useMemo(() => {
@@ -105,10 +117,16 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className={styles.layout}>
-      <aside className={styles.sidebar}>
+      <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
+        <button className={styles.collapseBtn} onClick={toggleCollapse} title={collapsed ? 'Expandir' : 'Colapsar'}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+
         <div className={styles.logo}>
           <img src="/logo_recordai.png" alt="RecordAI" className={styles.logoMark} />
-          <div>
+          <div className={styles.logoTexts}>
             <span className={styles.logoText}>RecordAI</span>
             <span className={styles.logoSub}>Pro</span>
           </div>
@@ -119,6 +137,7 @@ export default function DashboardLayout({ children }) {
             <a
               key={item.href}
               href={item.href}
+              data-label={item.label}
               className={`${styles.navItem} ${pathname === item.href ? styles.active : ''}`}
             >
               <span className={styles.navIcon}>{item.icon}</span>
@@ -145,7 +164,7 @@ export default function DashboardLayout({ children }) {
               <polyline points="16 17 21 12 16 7"/>
               <line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
-            Cerrar sesión
+            <span>Cerrar sesión</span>
           </button>
         </div>
       </aside>

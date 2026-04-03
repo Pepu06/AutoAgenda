@@ -6,31 +6,33 @@ import styles from './settings.module.css';
 
 const TIMEZONES = [
   { value: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires (GMT-3)' },
-  { value: 'America/Santiago',               label: 'Santiago (GMT-3/-4)' },
-  { value: 'America/Bogota',                 label: 'Bogotá (GMT-5)' },
-  { value: 'America/Mexico_City',            label: 'Ciudad de México (GMT-6)' },
-  { value: 'Europe/Madrid',                  label: 'Madrid (GMT+1/+2)' },
-  { value: 'UTC',                            label: 'UTC' },
+  { value: 'America/Santiago', label: 'Santiago (GMT-3/-4)' },
+  { value: 'America/Bogota', label: 'Bogotá (GMT-5)' },
+  { value: 'America/Mexico_City', label: 'Ciudad de México (GMT-6)' },
+  { value: 'Europe/Madrid', label: 'Madrid (GMT+1/+2)' },
+  { value: 'UTC', label: 'UTC' },
 ];
 
 const DEFAULTS = {
-  businessName:         '',
-  contactWhatsapp:      '',
-  timezone:             'America/Argentina/Buenos_Aires',
-  timeFormat:           '24h',
-  messagingEnabled:     true,
-  messageTemplate:      '',
-  whatsappProvider:     'meta',
+  businessName: '',
+  contactWhatsapp: '',
+  timezone: 'America/Argentina/Buenos_Aires',
+  timeFormat: '24h',
+  messagingEnabled: true,
+  messageTemplate: '',
+  whatsappProvider: 'meta',
   whatsappPhoneNumberId: '',
-  whatsappAccessToken:   '',
-  wasenderApiKey:        '',
-  adminWhatsapp:        '',
-  adminAlertsEnabled:   false,
-  reportDays:           '1,2,3,4,5',
-  reportType:           'morning',
+  whatsappAccessToken: '',
+  wasenderApiKey: '',
+  adminWhatsapp: '',
+  adminAlertsEnabled: false,
+  reportDays: '1,2,3,4,5',
+  reportType: 'morning',
   adminDailyReportTime: '08:00',
-  reminderType:         'day_before',
-  reminderTime:         '10:00',
+  reminderType: 'day_before',
+  reminderTime: '10:00',
+  locationMode: 'fixed',
+  location: '',
 };
 
 const WEEK_DAYS = [
@@ -54,34 +56,36 @@ function hoursOptions(min, max) {
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(DEFAULTS);
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [saved, setSaved]       = useState(false);
-  const [error, setError]       = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     api.get('/settings').then(res => {
       const d = res.data;
       const mapped = {};
-      if (d.businessName        != null) mapped.businessName        = d.businessName;
-      if (d.contactWhatsapp     != null) mapped.contactWhatsapp     = d.contactWhatsapp;
-      if (d.timezone            != null) mapped.timezone            = d.timezone;
-      if (d.timeFormat          != null) mapped.timeFormat          = d.timeFormat;
-      if (d.messagingEnabled    != null) mapped.messagingEnabled    = d.messagingEnabled;
-      if (d.messageTemplate     != null) mapped.messageTemplate     = d.messageTemplate;
-      if (d.whatsappProvider    != null) mapped.whatsappProvider    = d.whatsappProvider;
+      if (d.businessName != null) mapped.businessName = d.businessName;
+      if (d.contactWhatsapp != null) mapped.contactWhatsapp = d.contactWhatsapp;
+      if (d.timezone != null) mapped.timezone = d.timezone;
+      if (d.timeFormat != null) mapped.timeFormat = d.timeFormat;
+      if (d.messagingEnabled != null) mapped.messagingEnabled = d.messagingEnabled;
+      if (d.messageTemplate != null) mapped.messageTemplate = d.messageTemplate;
+      if (d.whatsappProvider != null) mapped.whatsappProvider = d.whatsappProvider;
       if (d.whatsappPhoneNumberId != null) mapped.whatsappPhoneNumberId = d.whatsappPhoneNumberId;
       if (d.whatsappAccessToken != null) mapped.whatsappAccessToken = d.whatsappAccessToken;
-      if (d.wasenderApiKey      != null) mapped.wasenderApiKey      = d.wasenderApiKey;
-      if (d.adminWhatsapp       != null) mapped.adminWhatsapp       = d.adminWhatsapp;
-      if (d.adminAlertsEnabled  != null) mapped.adminAlertsEnabled  = d.adminAlertsEnabled;
-      if (d.reportDays           != null) mapped.reportDays           = d.reportDays;
-      if (d.reportType           != null) mapped.reportType           = d.reportType;
+      if (d.wasenderApiKey != null) mapped.wasenderApiKey = d.wasenderApiKey;
+      if (d.adminWhatsapp != null) mapped.adminWhatsapp = d.adminWhatsapp;
+      if (d.adminAlertsEnabled != null) mapped.adminAlertsEnabled = d.adminAlertsEnabled;
+      if (d.reportDays != null) mapped.reportDays = d.reportDays;
+      if (d.reportType != null) mapped.reportType = d.reportType;
       if (d.adminDailyReportTime != null) mapped.adminDailyReportTime = d.adminDailyReportTime;
-      if (d.reminderType        != null) mapped.reminderType        = d.reminderType;
-      if (d.reminderTime        != null) mapped.reminderTime        = d.reminderTime;
+      if (d.reminderType != null) mapped.reminderType = d.reminderType;
+      if (d.reminderTime != null) mapped.reminderTime = d.reminderTime;
+      if (d.locationMode != null) mapped.locationMode = d.locationMode;
+      if (d.location     != null) mapped.location     = d.location;
       setSettings(s => ({ ...s, ...mapped }));
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch(() => { }).finally(() => setLoading(false));
   }, []);
 
   function set(key, value) {
@@ -92,23 +96,24 @@ export default function SettingsPage() {
     setSaving(true); setError(''); setSaved(false);
     try {
       await api.put('/settings', {
-        business_name:        settings.businessName,
-        contact_whatsapp:     settings.contactWhatsapp,
-        timezone:             settings.timezone,
-        time_format:          settings.timeFormat,
-        messaging_enabled:    settings.messagingEnabled,
-        message_template:     settings.messageTemplate,
-        whatsapp_provider:    settings.whatsappProvider,
+        business_name: settings.businessName,
+        timezone: settings.timezone,
+        time_format: settings.timeFormat,
+        messaging_enabled: settings.messagingEnabled,
+        message_template: settings.messageTemplate,
+        whatsapp_provider: settings.whatsappProvider,
         whatsapp_phone_number_id: settings.whatsappPhoneNumberId,
         whatsapp_access_token: settings.whatsappAccessToken,
-        wasender_api_key:     settings.wasenderApiKey,
-        admin_whatsapp:       settings.adminWhatsapp,
+        wasender_api_key: settings.wasenderApiKey,
+        admin_whatsapp: settings.adminWhatsapp,
         admin_alerts_enabled: settings.adminAlertsEnabled,
-        report_days:             settings.reportDays,
-        report_type:             settings.reportType,
+        report_days: settings.reportDays,
+        report_type: settings.reportType,
         admin_daily_report_time: settings.adminDailyReportTime,
-        reminder_type:        settings.reminderType,
-        reminder_time:        settings.reminderTime,
+        reminder_type: settings.reminderType,
+        reminder_time: settings.reminderTime,
+        location_mode: settings.locationMode,
+        location:      settings.location,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -135,11 +140,8 @@ export default function SettingsPage() {
           <p className={styles.sectionDesc}>Información básica de tu negocio</p>
         </div>
         <div className={styles.fields}>
-          <Field label="Nombre del negocio">
+          <Field label="Nombre del negocio" hint="Hasta 40 caracteres, se muestra en el encabezado del mensaje de recordatorio.">
             <input className={styles.input} value={settings.businessName} onChange={e => set('businessName', e.target.value)} placeholder="Ej: Consultorio Dra. López" />
-          </Field>
-          <Field label="WhatsApp de contacto" hint="Número al que los clientes pueden escribir si tienen dudas">
-            <input className={styles.input} value={settings.contactWhatsapp} onChange={e => set('contactWhatsapp', e.target.value)} placeholder="+5491112345678" />
           </Field>
           <div className={styles.row}>
             <Field label="Zona horaria">
@@ -222,7 +224,9 @@ export default function SettingsPage() {
           <Field label="Vista previa del mensaje">
             <div className={styles.phonePreview}>
               <div className={styles.phoneBar}>
-                <div className={styles.phoneAvatar}>MG</div>
+                <div className={styles.phoneAvatar}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M9.175 10.825Q8 9.65 8 8t1.175-2.825T12 4t2.825 1.175T16 8t-1.175 2.825T12 12t-2.825-1.175M4 20v-2.8q0-.85.438-1.562T5.6 14.55q1.55-.775 3.15-1.162T12 13t3.25.388t3.15 1.162q.725.375 1.163 1.088T20 17.2V20z" /></svg>
+                </div>
                 <span className={styles.phoneContact}>María García</span>
               </div>
               <div className={styles.phoneMessages}>
@@ -230,7 +234,7 @@ export default function SettingsPage() {
                   <div className={styles.phoneBubbleHeader}>
                     Recordatorio de turno con {settings.businessName || 'tu negocio'}
                   </div>
-                  <p>Hola María García, como estas?</p>
+                  <p>Hola María García, como estas? 👋</p>
                   {settings.messageTemplate && (
                     <p style={{ marginTop: 8, whiteSpace: 'pre-line' }}>{settings.messageTemplate}</p>
                   )}
@@ -255,7 +259,7 @@ export default function SettingsPage() {
             <div className={styles.toggle}>
               {[
                 { value: 'day_before', label: 'Día anterior' },
-                { value: 'same_day',   label: 'Mismo día' },
+                { value: 'same_day', label: 'Mismo día' },
               ].map(opt => (
                 <button
                   key={opt.value}
@@ -348,6 +352,49 @@ export default function SettingsPage() {
               }
             </select>
           </Field>
+        </div>
+      </section>
+
+      {/* UBICACIÓN */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Ubicación</h2>
+          <p className={styles.sectionDesc}>Dirección que se incluye en el recordatorio al cliente</p>
+        </div>
+        <div className={styles.fields}>
+          <Field label="Fuente de la ubicación">
+            <div className={styles.toggle}>
+              {[
+                { value: 'fixed',    label: 'Dirección fija' },
+                { value: 'calendar', label: 'Desde el evento de Google Calendar' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  className={`${styles.toggleBtn} ${settings.locationMode === opt.value ? styles.toggleActive : ''}`}
+                  onClick={() => set('locationMode', opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+          {settings.locationMode === 'fixed' && (
+            <Field label="Dirección" hint="Se enviará en todos los recordatorios como variable {{ubicacion}}">
+              <input
+                className={styles.input}
+                value={settings.location}
+                onChange={e => set('location', e.target.value)}
+                placeholder="Ej: Av. Corrientes 1234, CABA"
+              />
+            </Field>
+          )}
+          {settings.locationMode === 'calendar' && (
+            <Field label="Fuente" hint="Se usará la dirección definida en cada evento de Google Calendar. Si el evento no tiene dirección, el campo quedará vacío.">
+              <div style={{ fontSize: 13, color: 'var(--text-2)', padding: '10px 0' }}>
+                La variable <code style={{ background: 'var(--surface-2)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace' }}>{'{{ubicacion}}'}</code> tomará el valor del campo "Lugar" de cada evento en Google Calendar.
+              </div>
+            </Field>
+          )}
         </div>
       </section>
 

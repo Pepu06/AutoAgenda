@@ -384,7 +384,7 @@ async function remindEvent(req, res, next) {
     // Fetch tenant settings
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('business_name, message_template, timezone, time_format, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key')
+      .select('business_name, message_template, timezone, time_format, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode')
       .eq('id', req.tenantId)
       .single();
 
@@ -410,6 +410,10 @@ async function remindEvent(req, res, next) {
 
     const encabezado = tenant?.business_name;
     const mensajeEditable = (tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ');
+    // Location: use Google Calendar event location if mode is 'calendar', else tenant fixed location
+    const ubicacion = (tenant?.location_mode === 'calendar' && event?.location)
+      ? event.location
+      : (tenant?.location || '');
 
     const tenantConfig = {
       provider: tenant?.whatsapp_provider || 'meta',
@@ -422,10 +426,11 @@ async function remindEvent(req, res, next) {
     await sendTemplate(phone, 'recordatorio_turno', {
       header: [{ name: 'encabezado', value: encabezado }],
       body: [
-        { name: 'nombre_cliente', value: clientName },
+        { name: 'nombre_cliente',   value: clientName },
         { name: 'mensaje_editable', value: mensajeEditable },
-        { name: 'fecha', value: fechaLabel },
-        { name: 'hora', value: horaLabel },
+        { name: 'fecha',            value: fechaLabel },
+        { name: 'hora',             value: horaLabel },
+        { name: 'ubicacion',        value: ubicacion },
       ],
       ...(appointment?.id ? {
         buttons: [

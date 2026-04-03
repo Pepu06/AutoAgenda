@@ -43,6 +43,46 @@
   position: relative;
   z-index: 20;
   overflow: hidden;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed {
+  width: 72px;
+}
+
+/* Collapse toggle button */
+.collapseBtn {
+  position: absolute;
+  top: 24px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.collapseBtn:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.sidebar.collapsed .collapseBtn {
+  right: 50%;
+  transform: translateX(50%);
+}
+
+.sidebar.collapsed .collapseBtn svg {
+  transform: rotate(180deg);
 }
 
 .sidebar::before {
@@ -64,6 +104,25 @@
   margin-bottom: 40px;
   padding: 0 4px;
   cursor: default;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .logo {
+  justify-content: center;
+  padding: 0;
+  margin-bottom: 48px;
+}
+
+.logoTexts {
+  overflow: hidden;
+  white-space: nowrap;
+  transition: opacity 0.2s, width 0.25s;
+}
+
+.sidebar.collapsed .logoTexts {
+  opacity: 0;
+  width: 0;
 }
 
 .logoMark {
@@ -169,6 +228,52 @@
   font-size: 13.5px;
   font-weight: 500;
   white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.2s, width 0.25s;
+}
+
+.sidebar.collapsed .navLabel {
+  opacity: 0;
+  width: 0;
+}
+
+.sidebar.collapsed .navItem {
+  justify-content: center;
+  padding: 10px;
+}
+
+.sidebar.collapsed .navItem.active::before {
+  display: none;
+}
+
+/* Tooltip on collapsed nav items */
+.sidebar.collapsed .navItem {
+  position: relative;
+}
+
+.sidebar.collapsed .navItem::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar.collapsed .navItem:hover::after {
+  opacity: 1;
 }
 
 .navItem.active .navLabel {
@@ -191,6 +296,26 @@
   padding: 8px 8px;
   border-radius: var(--radius);
   margin-bottom: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .userRow {
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.sidebar.collapsed .userInfo {
+  display: none;
+}
+
+.sidebar.collapsed .logoutBtn {
+  justify-content: center;
+  padding: 10px;
+}
+
+.sidebar.collapsed .logoutBtn span {
+  display: none;
 }
 
 .avatar {

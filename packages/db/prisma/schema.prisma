@@ -58,6 +58,8 @@ model Tenant {
   reportDays             String?  @default("1,2,3,4,5")
   reportMorningTime      String?
   reportEveningTime      String?
+  locationMode           String?  @default("fixed")
+  location               String?
   createdAt              DateTime @default(now())
 
   users             User[]

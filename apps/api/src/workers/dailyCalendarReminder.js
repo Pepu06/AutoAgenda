@@ -49,7 +49,7 @@ async function runDailyReminders() {
       google_event_id,
       contact:contacts(name, phone),
       service:services(name),
-      tenant:tenants(business_name, message_template, timezone, time_format, reminder_type, reminder_time, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key)
+      tenant:tenants(business_name, message_template, timezone, time_format, reminder_type, reminder_time, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode)
     `)
     .in('status', ['pending', 'notified', 'confirmed'])
     .is('reminder_sent_at', null)
@@ -88,6 +88,7 @@ async function runDailyReminders() {
 
     const encabezado = (appt.tenant?.business_name || 'RecordAI').slice(0, 40);
     const mensajeEditable = (appt.tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ');
+    const ubicacion = appt.tenant?.location || '';
 
     const tenantConfig = {
       provider: appt.tenant?.whatsapp_provider || 'meta',
@@ -100,10 +101,11 @@ async function runDailyReminders() {
       await sendTemplate(appt.contact.phone, 'recordatorio_turno', {
         header: [{ name: 'encabezado', value: encabezado }],
         body: [
-          { name: 'nombre_cliente', value: appt.contact.name || 'Cliente' },
+          { name: 'nombre_cliente',   value: appt.contact.name || 'Cliente' },
           { name: 'mensaje_editable', value: mensajeEditable },
-          { name: 'fecha', value: fechaLabel },
-          { name: 'hora', value: horaLabel },
+          { name: 'fecha',            value: fechaLabel },
+          { name: 'hora',             value: horaLabel },
+          { name: 'ubicacion',        value: ubicacion },
         ],
         buttons: [
           { index: 0, payload: `confirm_${appt.id}` },

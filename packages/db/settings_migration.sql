@@ -1,7 +1,6 @@
 -- RecordAI Settings Migration — run this in Supabase SQL Editor
 
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_name TEXT;
-ALTER TABLE tenants ADD COLUMN IF NOT EXISTS contact_whatsapp TEXT;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'America/Argentina/Buenos_Aires';
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS time_format TEXT NOT NULL DEFAULT '24h';
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS messaging_enabled BOOLEAN NOT NULL DEFAULT TRUE;

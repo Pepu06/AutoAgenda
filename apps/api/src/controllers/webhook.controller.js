@@ -138,7 +138,7 @@ async function processMessage(message, _metadata) {
     try {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('admin_whatsapp, timezone, time_format, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_token')
+        .select('admin_whatsapp, admin_alerts_enabled, timezone, time_format, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key')
         .eq('id', appointment.tenant_id)
         .single();
 
