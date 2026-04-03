@@ -107,7 +107,7 @@ export default function DashboardLayout({ children }) {
     <div className={styles.layout}>
       <aside className={styles.sidebar}>
         <div className={styles.logo}>
-          <img src="/logo_recordai.jpg" alt="RecordAI" className={styles.logoMark} />
+          <img src="/logo_recordai.png" alt="RecordAI" className={styles.logoMark} />
           <div>
             <span className={styles.logoText}>RecordAI</span>
             <span className={styles.logoSub}>Pro</span>

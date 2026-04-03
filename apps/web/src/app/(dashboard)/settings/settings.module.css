@@ -166,7 +166,7 @@
   cursor: pointer;
   transition: box-shadow 0.15s, background 0.15s;
 }
-.varPill:hover { box-shadow: var(--accent-glow-sm); background: rgba(124, 110, 248, 0.18); }
+.varPill:hover { box-shadow: var(--accent-glow-sm); background: rgba(17, 75, 123, 0.18); }
 
 /* Switch */
 .switchRow { display: flex; align-items: center; gap: 12px; }
@@ -272,11 +272,11 @@
   font-weight: 700;
   cursor: pointer;
   transition: box-shadow 0.2s, transform 0.15s, opacity 0.15s;
-  box-shadow: 0 4px 18px rgba(124, 110, 248, 0.35);
+  box-shadow: 0 3px 14px rgba(17, 75, 123, 0.30);
   letter-spacing: -0.1px;
 }
 .btnSave:hover:not(:disabled) {
-  box-shadow: 0 6px 26px rgba(124, 110, 248, 0.55);
+  box-shadow: 0 5px 22px rgba(17, 75, 123, 0.45);
   transform: translateY(-1px);
 }
 .btnSave:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }

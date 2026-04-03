@@ -21,7 +21,7 @@
   border-radius: 50%;
   background: var(--accent);
   display: inline-block;
-  box-shadow: 0 0 8px rgba(124, 110, 248, 0.7);
+  box-shadow: 0 0 8px rgba(17, 75, 123, 0.6);
 }
 
 .greeting {

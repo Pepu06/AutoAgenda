@@ -12,7 +12,10 @@
   .container {
     grid-template-columns: 1fr;
   }
-  .decorPanel { display: none; }
+
+  .decorPanel {
+    display: none;
+  }
 }
 
 /* ── Decorative left panel ── */
@@ -36,7 +39,7 @@
   left: -100px;
   width: 500px;
   height: 500px;
-  background: radial-gradient(ellipse at center, rgba(124, 110, 248, 0.18) 0%, transparent 65%);
+  background: radial-gradient(ellipse at center, rgba(64, 201, 162, 0.12) 0%, transparent 65%);
   pointer-events: none;
 }
 
@@ -47,7 +50,7 @@
   right: -80px;
   width: 400px;
   height: 400px;
-  background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.12) 0%, transparent 65%);
+  background: radial-gradient(ellipse at center, rgba(163, 247, 181, 0.10) 0%, transparent 65%);
   pointer-events: none;
 }
 
@@ -69,9 +72,10 @@
 .decorMark {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
+  border-radius: 50%;
   object-fit: cover;
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
 .decorBrandName {
@@ -156,7 +160,7 @@
   transform: translate(-50%, -50%);
   width: 400px;
   height: 400px;
-  background: radial-gradient(ellipse at center, rgba(124, 110, 248, 0.05) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(17, 75, 123, 0.05) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -177,7 +181,9 @@
 }
 
 @media (max-width: 900px) {
-  .mobileBrand { display: flex; }
+  .mobileBrand {
+    display: flex;
+  }
 }
 
 .mobileMark {
@@ -264,16 +270,18 @@
   cursor: pointer;
   margin-top: 6px;
   transition: box-shadow 0.2s, transform 0.15s, opacity 0.15s;
-  box-shadow: 0 4px 20px rgba(124, 110, 248, 0.35);
+  box-shadow: 0 3px 16px rgba(17, 75, 123, 0.25);
   letter-spacing: -0.1px;
 }
 
 .button:hover:not(:disabled) {
-  box-shadow: 0 6px 28px rgba(124, 110, 248, 0.55);
+  box-shadow: 0 6px 28px rgba(17, 75, 123, 0.40);
   transform: translateY(-1px);
 }
 
-.button:active:not(:disabled) { transform: translateY(0); }
+.button:active:not(:disabled) {
+  transform: translateY(0);
+}
 
 .button:disabled {
   opacity: 0.45;
@@ -307,7 +315,9 @@
   transition: opacity 0.15s;
 }
 
-.link a:hover { opacity: 0.8; }
+.link a:hover {
+  opacity: 0.8;
+}
 
 /* Divider */
 .divider {
