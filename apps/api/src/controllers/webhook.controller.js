@@ -48,45 +48,6 @@ function parseIntent(text) {
   return null;
 }
 
-function onlyDigits(value) {
-  return String(value || '').replace(/\D/g, '');
-}
-
-async function findPendingAppointmentByPhone(phone) {
-  const phoneDigits = onlyDigits(phone);
-  const phoneLast10 = phoneDigits.slice(-10);
-
-  // Match contacts by last 10 digits to avoid format issues (+54, 549, spaces, etc.)
-  const { data: contacts, error: contactsError } = await supabase
-    .from('contacts')
-    .select('id, phone')
-    .ilike('phone', `%${phoneLast10}`)
-    .limit(50);
-
-  if (contactsError) throw contactsError;
-
-  if (!contacts?.length) return null;
-
-  const matchedContact = contacts.find((c) => onlyDigits(c.phone).endsWith(phoneLast10));
-  if (!matchedContact) return null;
-
-  // Find the appointment closest to now (upcoming or up to 2h past)
-  const windowStart = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-
-  const { data: appointment, error: appointmentError } = await supabase
-    .from('appointments')
-    .select('id, tenant_id, google_event_id, user_id, contact_id')
-    .eq('contact_id', matchedContact.id)
-    .in('status', ['pending', 'notified', 'confirmed', 'cancelled'])
-    .gte('scheduled_at', windowStart)
-    .order('scheduled_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (appointmentError) throw appointmentError;
-
-  return appointment || null;
-}
 
 async function processMessage(message, _metadata) {
   const from = message.from;
@@ -121,13 +82,15 @@ async function processMessage(message, _metadata) {
     return;
   }
 
-  // Extract embedded appointmentId from button payload: "confirm_<uuid>" / "cancel_<uuid>"
-  let directAppointmentId = null;
+  // Button payload must embed appointmentId: "confirm_<uuid>" / "cancel_<uuid>"
   const embedMatch = rawText.match(/^(confirm|cancel)_([0-9a-f-]{36})$/i);
-  if (embedMatch) {
-    rawText = embedMatch[1];
-    directAppointmentId = embedMatch[2];
+  if (!embedMatch) {
+    logger.info({ from, rawText }, '[Webhook] Ignored message without embedded appointmentId');
+    return;
   }
+
+  rawText = embedMatch[1];
+  const directAppointmentId = embedMatch[2];
 
   const intent = parseIntent(rawText);
   if (!intent) {
@@ -135,26 +98,16 @@ async function processMessage(message, _metadata) {
     return;
   }
 
-  // Meta sends phone without '+'; DB stores E.164 with '+'
-  const phone = from.startsWith('+') ? from : `+${from}`;
-  logger.info({ phone, intent, directAppointmentId }, '[Webhook] Processing intent');
+  logger.info({ from, intent, directAppointmentId }, '[Webhook] Processing intent');
 
-  let appointment;
-  if (directAppointmentId) {
-    // Direct lookup by appointmentId embedded in button payload — 100% accurate
-    const { data } = await supabase
-      .from('appointments')
-      .select('id, tenant_id, google_event_id, user_id, contact_id')
-      .eq('id', directAppointmentId)
-      .maybeSingle();
-    appointment = data;
-  } else {
-    // Fallback: find by phone (for manual text replies)
-    appointment = await findPendingAppointmentByPhone(phone);
-  }
+  const { data: appointment } = await supabase
+    .from('appointments')
+    .select('id, tenant_id, google_event_id, user_id, contact_id')
+    .eq('id', directAppointmentId)
+    .maybeSingle();
 
   if (!appointment) {
-    logger.warn({ phone, directAppointmentId }, '[Webhook] Appointment not found');
+    logger.warn({ directAppointmentId }, '[Webhook] Appointment not found');
     return;
   }
   const newStatus = intent === 'confirm' ? 'confirmed' : 'cancelled';
