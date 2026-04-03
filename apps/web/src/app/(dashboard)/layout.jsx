@@ -88,22 +88,19 @@ export default function DashboardLayout({ children }) {
     router.push('/login');
   }
 
-  const { initials, displayName, businessName, profilePicture } = useMemo(() => {
+  const { initials, businessName, profilePicture } = useMemo(() => {
     try {
       const token = getToken();
-      if (!token) return { initials: 'U', displayName: 'Usuario', businessName: 'Mi Negocio', profilePicture: null };
+      if (!token) return { initials: 'MN', businessName: 'Mi Negocio', profilePicture: null };
       const payload = JSON.parse(atob(token.split('.')[1]));
-      const name = payload.name || payload.email || 'Usuario';
-      const business = payload.businessName || payload.tenantName || 'Mi Negocio';
+      const business = payload.tenantName || payload.email?.split('@')[0] || 'Mi Negocio';
       const picture = payload.picture || null;
-      const parts = name.split(' ');
       return {
-        initials: parts.map(w => w[0]).slice(0, 2).join('').toUpperCase(),
-        displayName: parts[0],
+        initials: business.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
         businessName: business,
         profilePicture: picture,
       };
-    } catch { return { initials: 'U', displayName: 'Usuario', businessName: 'Mi Negocio', profilePicture: null }; }
+    } catch { return { initials: 'MN', businessName: 'Mi Negocio', profilePicture: null }; }
   }, []);
 
   return (

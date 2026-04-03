@@ -5,9 +5,9 @@ const env = require('../config/env');
 const { AppError } = require('../errors');
 const { exchangeCodeForTokens, getUserInfo } = require('../services/google');
 
-function makeJwt(user) {
+function makeJwt(user, extra = {}) {
   return jwt.sign(
-    { tenantId: user.tenant_id, userId: user.id, role: user.role },
+    { tenantId: user.tenant_id, userId: user.id, role: user.role, ...extra },
     env.JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -35,7 +35,8 @@ async function register(req, res, next) {
       .from('users').insert({ tenant_id: tenant.id, email, password_hash: passwordHash, role: 'owner' }).select().single();
     if (userErr) throw userErr;
 
-    return res.status(201).json({ success: true, data: { token: makeJwt(user), tenantId: tenant.id, userId: user.id, role: user.role } });
+    const token = makeJwt(user, { tenantName, email });
+    return res.status(201).json({ success: true, data: { token, tenantId: tenant.id, userId: user.id, role: user.role } });
   } catch (err) { return next(err); }
 }
 
@@ -50,7 +51,9 @@ async function login(req, res, next) {
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) throw new AppError('Credenciales inválidas', 401);
 
-    return res.json({ success: true, data: { token: makeJwt(user), tenantId: user.tenant_id, userId: user.id, role: user.role } });
+    const { data: tenant } = await supabase.from('tenants').select('name').eq('id', user.tenant_id).maybeSingle();
+    const token = makeJwt(user, { tenantName: tenant?.name, email: user.email });
+    return res.json({ success: true, data: { token, tenantId: user.tenant_id, userId: user.id, role: user.role } });
   } catch (err) { return next(err); }
 }
 
@@ -63,7 +66,7 @@ async function googleAuth(req, res, next) {
     const tokens = await exchangeCodeForTokens(code);
     const { access_token, refresh_token } = tokens;
 
-    const { email, name } = await getUserInfo(access_token);
+    const { email, name, picture } = await getUserInfo(access_token);
     if (!email) throw new AppError('No se pudo obtener el email de Google', 401);
 
     let { data: user } = await supabase.from('users').select('*').eq('email', email).maybeSingle();
@@ -75,7 +78,9 @@ async function googleAuth(req, res, next) {
         google_refresh_token: refresh_token || user.google_refresh_token,
       }).eq('id', user.id);
 
-      return res.json({ success: true, data: { token: makeJwt(user), tenantId: user.tenant_id, userId: user.id, role: user.role } });
+      const { data: tenant } = await supabase.from('tenants').select('name').eq('id', user.tenant_id).maybeSingle();
+      const token = makeJwt(user, { name, picture, tenantName: tenant?.name, email });
+      return res.json({ success: true, data: { token, tenantId: user.tenant_id, userId: user.id, role: user.role } });
     }
 
     // New user — auto-create tenant
@@ -97,7 +102,8 @@ async function googleAuth(req, res, next) {
       }).select().single();
     if (userErr) throw userErr;
 
-    return res.status(201).json({ success: true, data: { token: makeJwt(newUser), tenantId: tenant.id, userId: newUser.id, role: newUser.role } });
+    const token = makeJwt(newUser, { name, picture, tenantName: tenant.name, email });
+    return res.status(201).json({ success: true, data: { token, tenantId: tenant.id, userId: newUser.id, role: newUser.role } });
   } catch (err) { return next(err); }
 }
 
