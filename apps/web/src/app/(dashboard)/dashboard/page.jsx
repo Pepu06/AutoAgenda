@@ -10,8 +10,6 @@ const STATUS_CONFIG = {
   notified:  { label: 'Notificado', color: 'var(--blue)',    bg: 'var(--blue-bg)' },
   confirmed: { label: 'Confirmado', color: 'var(--green)',   bg: 'var(--green-bg)' },
   cancelled: { label: 'Cancelado',  color: 'var(--red)',     bg: 'var(--red-bg)' },
-  completed: { label: 'Completado', color: 'var(--accent)',  bg: 'var(--accent-bg)' },
-  no_show:   { label: 'No asistió', color: 'var(--gray)',    bg: 'var(--gray-bg)' },
 };
 
 function getGreeting() {

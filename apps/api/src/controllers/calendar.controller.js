@@ -269,7 +269,7 @@ async function events(req, res, next) {
             service_id: service.id,
             user_id: req.userId,
             scheduled_at: new Date(event.start).toISOString(),
-            status: null,
+            status: "Sin enviar",
             google_event_id: event.id,
           })
           .select('id, scheduled_at')
@@ -426,8 +426,8 @@ async function createEvent(req, res, next) {
         service_id: serviceId,
         user_id: req.userId,
         scheduled_at: new Date(scheduledAt).toISOString(),
-          status: null,
-          notes,
+        status: "Sin enviar",
+        notes,
       })
       .select('*')
       .single();

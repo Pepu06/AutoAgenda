@@ -46,18 +46,32 @@ async function sendConfirmation({ appointmentId }) {
     ],
   });
 
-  await supabase.from('appointments').update({ 
-    confirmation_sent_at: new Date().toISOString(),
-    status: 'notified'
-  }).eq('id', appointmentId);
+  const { error: updateError } = await supabase
+    .from('appointments')
+    .update({
+      confirmation_sent_at: new Date().toISOString(),
+      status: 'notified',
+    })
+    .eq('id', appointmentId)
+    .eq('tenant_id', appointment.tenant_id);
 
-  await supabase.from('message_logs').insert({
+  if (updateError) {
+    logger.error({ appointmentId, updateError }, 'Failed to mark appointment as notified after confirmation');
+    throw updateError;
+  }
+
+  const { error: logError } = await supabase.from('message_logs').insert({
     tenant_id:      appointment.tenant_id,
     appointment_id: appointmentId,
     type:           'confirmation',
     direction:      'outbound',
     status:         'sent',
   });
+
+  if (logError) {
+    logger.error({ appointmentId, logError }, 'Failed to insert confirmation message log');
+    throw logError;
+  }
 
   logger.info({ appointmentId }, 'Confirmation sent via confirmacion_turno template, status changed to notified');
 }
