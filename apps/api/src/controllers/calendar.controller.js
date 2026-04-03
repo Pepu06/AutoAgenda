@@ -341,11 +341,11 @@ async function remindEvent(req, res, next) {
 
     const start = event.start?.dateTime || (event.start?.date ? `${event.start.date}T12:00:00` : null);
 
-    // Try to get client name from the contact associated with this event's appointment in the DB
+    // Get appointment from DB to obtain id and client name
     let clientName = null;
     const { data: appointment } = await supabase
       .from('appointments')
-      .select('contact:contacts(name)')
+      .select('id, contact:contacts(name)')
       .eq('google_event_id', eventId)
       .eq('tenant_id', req.tenantId)
       .maybeSingle();
@@ -353,7 +353,6 @@ async function remindEvent(req, res, next) {
     if (appointment?.contact?.name) {
       clientName = appointment.contact.name;
     } else {
-      // Fallback: take only text before phone number in event title
       clientName = extractClientName(event.summary || '');
     }
 
@@ -385,8 +384,8 @@ async function remindEvent(req, res, next) {
     const encabezado = tenant?.business_name || 'RecordAI';
     const mensajeEditable = (tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ');
 
-    // Send approved Meta template: recordatorio_turno
-    await sendTemplate(appointment.contact.phone, 'recordatorio_turno', {
+    // Send approved Meta template: recordatorio_turno with appointmentId in button payloads
+    await sendTemplate(phone, 'recordatorio_turno', {
       header: [{ name: 'encabezado', value: encabezado }],
       body: [
         { name: 'nombre_cliente', value: clientName },
@@ -394,10 +393,12 @@ async function remindEvent(req, res, next) {
         { name: 'fecha', value: fechaLabel },
         { name: 'hora', value: horaLabel },
       ],
-      buttons: [
-        { index: 0, payload: `confirm_${appointment.id}` },
-        { index: 1, payload: `cancel_${appointment.id}` },
-      ],
+      ...(appointment?.id ? {
+        buttons: [
+          { index: 0, payload: `confirm_${appointment.id}` },
+          { index: 1, payload: `cancel_${appointment.id}` },
+        ],
+      } : {}),
     });
 
     // Mark event as pending (yellow) in Calendar
