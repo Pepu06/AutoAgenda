@@ -3,6 +3,7 @@ const { sendTemplate } = require('../services/whatsapp');
 const logger = require('../config/logger');
 const { appointmentsQueue } = require('./queue');
 const { JobName } = require('@recordai/shared');
+const { formatTemplateHour } = require('../utils/datetime');
 
 function hasReminderConfig(tenant) {
   const businessName = String(tenant?.business_name || '').trim();
@@ -38,8 +39,9 @@ async function sendReminder({ appointmentId }) {
   const fechaLabel = dateObj.toLocaleDateString('es-AR', {
     timeZone: tz, weekday: 'long', day: '2-digit', month: '2-digit',
   });
-  const horaLabel = dateObj.toLocaleTimeString('es-AR', {
-    timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
+  const horaLabel = formatTemplateHour(dateObj, {
+    timeZone: tz,
+    timeFormat: appointment.tenant?.time_format,
   });
 
   const encabezado  = (appointment.tenant?.business_name || 'RecordAI').slice(0, 40);

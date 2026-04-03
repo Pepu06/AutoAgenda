@@ -5,7 +5,7 @@ const { sendTemplate } = require('../services/whatsapp');
 const { appointmentsQueue } = require('../workers/queue');
 const { JobName } = require('@recordai/shared');
 const { AppError } = require('../errors');
-const { formatTime } = require('../utils/datetime');
+const { formatTime, formatTemplateHour } = require('../utils/datetime');
 
 const PHONE_REGEX = /\+?\d[\d\s()-]{7,}/;
 
@@ -402,7 +402,7 @@ async function remindEvent(req, res, next) {
       })
       : '';
     const horaLabel = dateObj
-      ? formatTime(dateObj, {
+      ? formatTemplateHour(dateObj, {
         timeZone: tenantTz,
         timeFormat: tenant?.time_format,
       })

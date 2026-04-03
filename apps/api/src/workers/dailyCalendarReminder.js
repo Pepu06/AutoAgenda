@@ -2,7 +2,7 @@ const cron = require('node-cron');
 const { supabase } = require('@recordai/db');
 const { sendTemplate } = require('../services/whatsapp');
 const logger = require('../config/logger');
-const { formatTime } = require('../utils/datetime');
+const { formatTemplateHour } = require('../utils/datetime');
 const { appointmentsQueue } = require('./queue');
 const { JobName } = require('@recordai/shared');
 
@@ -84,7 +84,7 @@ async function runDailyReminders() {
       day: '2-digit',
       month: '2-digit',
     });
-    const horaLabel = formatTime(dateObj, { timeZone: tz, timeFormat });
+    const horaLabel = formatTemplateHour(dateObj, { timeZone: tz, timeFormat });
 
     const encabezado = (appt.tenant?.business_name || 'RecordAI').slice(0, 40);
     const mensajeEditable = (appt.tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ');

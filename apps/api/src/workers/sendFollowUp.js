@@ -1,7 +1,7 @@
 const { supabase } = require('@recordai/db');
 const { sendTemplate } = require('../services/whatsapp');
 const logger = require('../config/logger');
-const { formatTime } = require('../utils/datetime');
+const { formatTemplateHour } = require('../utils/datetime');
 
 function hasReminderConfig(tenant) {
   const businessName = String(tenant?.business_name || '').trim();
@@ -40,7 +40,7 @@ async function sendFollowUp({ appointmentId }) {
     day: '2-digit',
     month: '2-digit',
   });
-  const time = formatTime(dateObj, { timeZone: tz, timeFormat: appointment.tenant?.time_format });
+  const time = formatTemplateHour(dateObj, { timeZone: tz, timeFormat: appointment.tenant?.time_format });
 
   const encabezado = appointment.tenant?.business_name;
   const mensajeEditable = `Aún no confirmaste tu cita del ${date} ${time}.`;
