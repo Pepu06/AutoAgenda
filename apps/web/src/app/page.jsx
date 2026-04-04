@@ -135,7 +135,7 @@ export default function LandingPage() {
       {/* ── Navbar ── */}
       <nav className={s.navbar}>
         <div className={s.navInner}>
-          <img src="/logo-landing.jpeg" alt="AutoAgenda" className={s.navLogo} />
+          <img src="/logo_autoagenda.png" alt="AutoAgenda" className={s.navLogo} />
           <Link href="/dashboard" className={s.navCta}>
             Entrar al Dashboard <span>→</span>
           </Link>
@@ -289,7 +289,7 @@ export default function LandingPage() {
       {/* ── Footer ── */}
       <footer className={s.footer}>
         <div className={s.footerInner}>
-          <img src="/logo-landing.jpeg" alt="AutoAgenda" className={s.footerLogoImg} />
+          <img src="/logo_autoagenda.png" alt="AutoAgenda" className={s.footerLogoImg} />
           <div className={s.footerLinks}>
             <Link href="/privacy" className={s.footerLink}>
               Política de Privacidad

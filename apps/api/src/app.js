@@ -18,7 +18,20 @@ const subscriptionRoutes = require('./routes/subscription.routes');
 const app = express();
 
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+
+const allowedOrigins = env.CORS_ORIGIN
+  ? env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean)
+  : [];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 app.get('/', (req, res) => {
