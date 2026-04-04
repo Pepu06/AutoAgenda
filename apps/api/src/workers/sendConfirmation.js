@@ -1,12 +1,13 @@
 const { supabase } = require('@recordai/db');
 const { sendTemplate } = require('../services/whatsapp');
+const { getCalendarEvent, refreshAccessToken } = require('../services/google');
 const logger = require('../config/logger');
 const { formatTime } = require('../utils/datetime');
 
 async function sendConfirmation({ appointmentId }) {
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('*, contact:contacts(*), service:services(*), tenant:tenants(*)')
+    .select('*, contact:contacts(name, phone), service:services(name), tenant:tenants(timezone, time_format, business_name, reminder_type, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode)')
     .eq('id', appointmentId)
     .maybeSingle();
 
@@ -35,6 +36,32 @@ async function sendConfirmation({ appointmentId }) {
   const reminderType = appointment.tenant?.reminder_type || 'day_before';
   const recordatorioTexto = reminderType === 'same_day' ? 'el mismo día' : 'el día anterior';
 
+  // Resolver ubicación según location_mode
+  let ubicacion = appointment.tenant?.location || '';
+  if (appointment.tenant?.location_mode === 'calendar' && appointment.google_event_id && appointment.user_id) {
+    try {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('google_access_token, google_refresh_token')
+        .eq('id', appointment.user_id)
+        .single();
+
+      if (userData?.google_access_token || userData?.google_refresh_token) {
+        let accessToken = userData.google_access_token;
+        if (userData.google_refresh_token) {
+          try {
+            accessToken = await refreshAccessToken(userData.google_refresh_token);
+            await supabase.from('users').update({ google_access_token: accessToken }).eq('id', appointment.user_id);
+          } catch { /* usar el token existente */ }
+        }
+        const event = await getCalendarEvent(accessToken, appointment.google_event_id);
+        if (event?.location) ubicacion = event.location;
+      }
+    } catch (err) {
+      logger.warn({ appointmentId, err: err.message }, 'Could not fetch calendar event location for confirmation');
+    }
+  }
+
   // Configuración del proveedor de WhatsApp
   const tenantConfig = {
     provider: appointment.tenant?.whatsapp_provider || 'meta',
@@ -50,8 +77,8 @@ async function sendConfirmation({ appointmentId }) {
       diaLabel,                              // {{3}} día de la cita
       horaLabel,                             // {{4}} hora de la cita
       appointment.service.name,              // {{5}} servicio
-      appointment.tenant.business_name, // {{6}} nombre del negocio
-      appointment.tenant.location,     // {{7}} ubicación
+      appointment.tenant?.business_name || '',     // {{6}} nombre del negocio
+      ubicacion,                                   // {{7}} ubicación
     ],
   }, tenantConfig);
 

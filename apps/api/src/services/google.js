@@ -166,13 +166,14 @@ async function getTodayCalendarEvents(accessToken) {
   return data.items || [];
 }
 
-async function createCalendarEvent(accessToken, { summary, description, startDateTime, endDateTime, attendees = [] }) {
+async function createCalendarEvent(accessToken, { summary, description, startDateTime, endDateTime, attendees = [], location }) {
   const body = {
     summary,
     description,
     start: { dateTime: startDateTime },
     end:   { dateTime: endDateTime },
   };
+  if (location) body.location = location;
   if (attendees.length) body.attendees = attendees.map(email => ({ email }));
 
   const params = new URLSearchParams();

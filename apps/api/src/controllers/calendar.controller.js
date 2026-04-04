@@ -463,11 +463,11 @@ async function remindEvent(req, res, next) {
 
 async function createEvent(req, res, next) {
   try {
-    const { contactId, serviceId, scheduledAt, notes } = req.body;
+    const { contactId, serviceId, scheduledAt, notes, location } = req.body;
 
     const { data: tenantSettings, error: tenantSettingsError } = await supabase
       .from('tenants')
-      .select('business_name, message_template, timezone, reminder_type, reminder_time')
+      .select('business_name, message_template, timezone, reminder_type, reminder_time, location_mode')
       .eq('id', req.tenantId)
       .single();
     if (tenantSettingsError) throw tenantSettingsError;
@@ -507,6 +507,7 @@ async function createEvent(req, res, next) {
         startDateTime: startDate.toISOString(),
         endDateTime: endDate.toISOString(),
         attendees,
+        location: tenantSettings.location_mode === 'calendar' ? (location || '') : undefined,
       }).catch(() => null);
 
       if (calEvent?.id) {

@@ -61,7 +61,7 @@ function GoogleCalIcon() {
   );
 }
 
-const EMPTY_CREATE = { contactId: '', serviceId: '', scheduledAt: '', notes: '' };
+const EMPTY_CREATE = { contactId: '', serviceId: '', scheduledAt: '', notes: '', location: '' };
 
 export default function CalendarPage() {
   const [connected, setConnected]     = useState(false);
@@ -78,6 +78,7 @@ export default function CalendarPage() {
   const [createError, setCreateError] = useState('');
   const [contacts, setContacts]       = useState([]);
   const [services, setServices]       = useState([]);
+  const [locationMode, setLocationMode] = useState('fixed');
 
   const fetchStatus = useCallback(async () => {
     const res = await api.get('/calendar/status');
@@ -122,11 +123,15 @@ export default function CalendarPage() {
   }
 
   async function openCreate() {
-    if (!contacts.length) {
-      const [c, s] = await Promise.all([api.get('/contacts'), api.get('/services')]);
-      setContacts(c.data || []);
-      setServices(s.data || []);
-    }
+    const promises = [
+      contacts.length ? Promise.resolve({ data: contacts }) : api.get('/contacts'),
+      services.length ? Promise.resolve({ data: services }) : api.get('/services'),
+      api.get('/settings'),
+    ];
+    const [c, s, settings] = await Promise.all(promises);
+    if (!contacts.length) setContacts(c.data || []);
+    if (!services.length) setServices(s.data || []);
+    setLocationMode(settings.data?.locationMode || 'fixed');
     setCreateForm({ ...EMPTY_CREATE, scheduledAt: selectedDate ? `${selectedDate}T09:00` : '' });
     setCreateError('');
     setShowCreate(true);
@@ -386,6 +391,18 @@ export default function CalendarPage() {
                   style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14 }}
                 />
               </div>
+              {locationMode === 'calendar' && (
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Ubicación del evento (opcional)</label>
+                  <input
+                    type="text"
+                    value={createForm.location}
+                    onChange={e => setCreateForm(f => ({ ...f, location: e.target.value }))}
+                    placeholder="Ej: Av. Corrientes 1234, CABA"
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14 }}
+                  />
+                </div>
+              )}
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Notas (opcional)</label>
                 <input

@@ -225,10 +225,11 @@ function buildTemplateText(templateName, params) {
     );
     const header = Array.isArray(params) ? '' : ((params?.header || []).find(p => p?.name === 'encabezado')?.value || '');
     const lines = [`📅 Recordatorio de turno${header ? ` con ${header}` : ''}`];
-    if (body.nombre_cliente)   lines.push(`\nHola ${body.nombre_cliente},`);
+    if (body.nombre_cliente)   lines.push(`\nHola ${body.nombre_cliente},como estas? 👋`);
     if (body.mensaje_editable) lines.push(body.mensaje_editable);
     if (body.fecha)            lines.push(`📆 Fecha: ${body.fecha}`);
     if (body.hora)             lines.push(`🕐 Hora: ${body.hora}`);
+    if (body.ubicacion)         lines.push(`📌 Ubicación: ${body.ubicacion}`);
     return lines.join('\n');
   }
 
@@ -236,16 +237,15 @@ function buildTemplateText(templateName, params) {
     const [name, when, day, hour, service, businessName, location] = bodyParams;
     let text = `✅ Confirmación de turno\n\nHola ${name}, tu turno de ${service} fue agendado para el ${day} a las ${hour}.`;
     
-    if (businessName) {
-      text += `\n\n📍 ${businessName}`;
-    }
-    
     if (location) {
       text += `\n📌 Ubicación: ${location}`;
     }
     
     text += `\n\nTe enviaremos un recordatorio ${when}.`;
     
+    if (businessName) {
+      text += `\n\n ${businessName}`;
+    }
     return text;
   }
 
