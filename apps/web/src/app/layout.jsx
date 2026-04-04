@@ -10,8 +10,8 @@ export const metadata = {
   applicationName: 'AutoAgenda',
   metadataBase: new URL('https://autoagenda.online'), // ACORDATE DE USAR EL .ONLINE QUE COMPRASTE
   icons: {
-    icon: '/icon.png', // Usa el nuevo PNG sin fondo
-    apple: '/icon.png',
+    icon: '/logo-landing.png', // Usa el nuevo PNG sin fondo
+    apple: '/logo-landing.png',
   },
   openGraph: {
     title: 'AutoAgenda',
