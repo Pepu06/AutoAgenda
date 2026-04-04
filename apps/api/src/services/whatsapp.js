@@ -233,8 +233,20 @@ function buildTemplateText(templateName, params) {
   }
 
   if (templateName === 'confirmacion_turno') {
-    const [name, when, day, hour, service] = bodyParams;
-    return `✅ Confirmación de turno\n\nHola ${name}, tu turno de ${service} fue agendado para el ${day} a las ${hour}.\n\nTe enviaremos un recordatorio ${when}.`;
+    const [name, when, day, hour, service, businessName, location] = bodyParams;
+    let text = `✅ Confirmación de turno\n\nHola ${name}, tu turno de ${service} fue agendado para el ${day} a las ${hour}.`;
+    
+    if (businessName) {
+      text += `\n\n📍 ${businessName}`;
+    }
+    
+    if (location) {
+      text += `\n📌 Ubicación: ${location}`;
+    }
+    
+    text += `\n\nTe enviaremos un recordatorio ${when}.`;
+    
+    return text;
   }
 
   // Default: join params with newlines

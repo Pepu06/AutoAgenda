@@ -45,11 +45,13 @@ async function sendConfirmation({ appointmentId }) {
   
   await sendTemplate(appointment.contact.phone, 'confirmacion_turno', {
     body: [
-      appointment.contact.name,        // {{1}} nombre del paciente
-      recordatorioTexto,               // {{2}} cuando se manda recordatorio
-      diaLabel,                        // {{3}} día de la cita
-      horaLabel,                       // {{4}} hora de la cita
-      appointment.service.name,        // {{5}} servicio
+      appointment.contact.name,              // {{1}} nombre del paciente
+      recordatorioTexto,                     // {{2}} cuando se manda recordatorio
+      diaLabel,                              // {{3}} día de la cita
+      horaLabel,                             // {{4}} hora de la cita
+      appointment.service.name,              // {{5}} servicio
+      appointment.tenant.business_name, // {{6}} nombre del negocio
+      appointment.tenant.location,     // {{7}} ubicación
     ],
   }, tenantConfig);
 
