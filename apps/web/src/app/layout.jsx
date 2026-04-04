@@ -14,7 +14,6 @@ export const metadata = {
     apple: '/icon.png',
   },
   openGraph: {
-  openGraph: {
     title: 'AutoAgenda',
     description:
       'Confirmación automática de citas por WhatsApp para clínicas y negocios.',
@@ -23,7 +22,7 @@ export const metadata = {
     siteName: 'AutoAgenda',
     images: [
       {
-        url: '/logo-landing.jpeg',
+        url: '/logo-landing.png',
         width: 1200,
         height: 630,
         alt: 'AutoAgenda',
@@ -35,9 +34,9 @@ export const metadata = {
     title: 'AutoAgenda',
     description:
       'Confirmación automática de citas por WhatsApp para clínicas y negocios.',
-    images: ['/logo-landing.jpeg'],
+    images: ['/logo-landing.png'],
   },
-};
+}
 
 export default function RootLayout({ children }) {
   return (
