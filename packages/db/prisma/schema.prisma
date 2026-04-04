@@ -3,9 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -39,6 +38,20 @@ enum MessageStatus {
   failed
 }
 
+enum SubscriptionPlan {
+  trial
+  inicial
+  profesional
+  custom
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
+  past_due
+  trial_expired
+}
+
 model Tenant {
   id                     String   @id @default(cuid())
   name                   String
@@ -60,6 +73,9 @@ model Tenant {
   reportEveningTime      String?
   locationMode           String?  @default("fixed")
   location               String?
+  trialEndsAt            DateTime?
+  messagesSentThisMonth  Int      @default(0)
+  subscriptionId         String?
   createdAt              DateTime @default(now())
 
   users             User[]
@@ -68,6 +84,8 @@ model Tenant {
   appointments      Appointment[]
   availabilityRules AvailabilityRule[]
   messageLogs       MessageLog[]
+  subscription      Subscription?
+  usageRecords      UsageRecord[]
 }
 
 model User {
@@ -170,3 +188,38 @@ model MessageLog {
   @@index([tenantId])
   @@index([appointmentId])
 }
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  tenantId           String             @unique
+  plan               SubscriptionPlan   @default(trial)
+  status             SubscriptionStatus @default(active)
+  mpSubscriptionId   String?            @unique
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([mpSubscriptionId])
+}
+
+model UsageRecord {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  year                Int
+  month               Int
+  messagesSent        Int      @default(0)
+  appointmentsCreated Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, year, month])
+  @@index([tenantId])
+}
+

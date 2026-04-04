@@ -23,6 +23,8 @@ const envSchema = z.object({
   CORS_ORIGIN:           z.string().optional().default('http://localhost:3000'),
   WASENDER_API_KEY:      z.string().optional().default(''),
   WASENDER_TEST_EMAIL:   z.string().optional().default('pedrogonzalezsoro@gmail.com'),
+  MERCADOPAGO_ACCESS_TOKEN:    z.string().optional().default(''),
+  MERCADOPAGO_WEBHOOK_SECRET:  z.string().optional().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

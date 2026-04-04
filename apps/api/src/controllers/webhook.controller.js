@@ -1,9 +1,11 @@
 const { supabase } = require('@autoagenda/db');
 const { getCalendarEvent, updateEventTitleAndColor, refreshAccessToken } = require('../services/google');
 const { sendTemplate } = require('../services/whatsapp');
+const { getSubscriptionStatus } = require('../services/mercadopago');
 const env = require('../config/env');
 const logger = require('../config/logger');
 const { formatTime } = require('../utils/datetime');
+const crypto = require('crypto');
 
 function verify(req, res) {
   const mode = req.query['hub.mode'];
@@ -380,4 +382,144 @@ async function handleDailyReportRequest(phone, tenantId, reportType) {
   logger.info({ phone, tenantId, reportType, count: appointments.length }, '[Webhook] Daily report sent');
 }
 
-module.exports = { verify, receive };
+/**
+ * Handle Mercado Pago webhook notifications
+ * POST /api/webhook/mercadopago
+ */
+async function handleMercadoPagoWebhook(req, res) {
+  try {
+    const signature = req.headers['x-signature'];
+    const requestId = req.headers['x-request-id'];
+    
+    // Verify webhook signature if secret is configured
+    if (env.MERCADOPAGO_WEBHOOK_SECRET && signature) {
+      const parts = signature.split(',');
+      const ts = parts.find(p => p.startsWith('ts='))?.split('=')[1];
+      const hash = parts.find(p => p.startsWith('v1='))?.split('=')[1];
+      
+      if (ts && hash) {
+        const manifest = `id:${requestId};request-id:${requestId};ts:${ts};`;
+        const hmac = crypto.createHmac('sha256', env.MERCADOPAGO_WEBHOOK_SECRET);
+        hmac.update(manifest);
+        const expectedHash = hmac.digest('hex');
+        
+        if (hash !== expectedHash) {
+          logger.warn({ requestId }, '[MP Webhook] Invalid signature');
+          return res.status(401).json({ error: 'Invalid signature' });
+        }
+      }
+    }
+
+    const { type, data, action } = req.body;
+    
+    logger.info({ type, action, dataId: data?.id }, '[MP Webhook] Received notification');
+
+    // Handle different event types
+    if (type === 'payment') {
+      await handlePaymentEvent(data.id, action);
+    } else if (type === 'subscription_preapproval') {
+      await handleSubscriptionEvent(data.id, action);
+    } else if (type === 'subscription_authorized_payment') {
+      await handleAuthorizedPaymentEvent(data.id, action);
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    logger.error({ error: error.message }, '[MP Webhook] Error processing webhook');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * Handle payment events from Mercado Pago
+ */
+async function handlePaymentEvent(paymentId, action) {
+  logger.info({ paymentId, action }, '[MP Webhook] Processing payment event');
+
+  // For now, we'll handle this when we get subscription events
+  // Payments are tied to subscriptions, so we process them together
+}
+
+/**
+ * Handle subscription events (preapproval)
+ */
+async function handleSubscriptionEvent(preapprovalId, action) {
+  logger.info({ preapprovalId, action }, '[MP Webhook] Processing subscription event');
+
+  try {
+    // Fetch subscription details from Mercado Pago
+    const mpSubscription = await getSubscriptionStatus(preapprovalId);
+    
+    // Find subscription in our database
+    const { data: subscription, error: fetchError } = await supabase
+      .from('subscriptions')
+      .select('id, tenant_id')
+      .eq('mp_subscription_id', preapprovalId)
+      .maybeSingle();
+
+    if (fetchError) {
+      logger.error({ error: fetchError.message, preapprovalId }, '[MP Webhook] Error fetching subscription');
+      return;
+    }
+
+    if (!subscription) {
+      logger.warn({ preapprovalId }, '[MP Webhook] Subscription not found in database');
+      return;
+    }
+
+    // Map MP status to our status
+    const statusMap = {
+      'authorized': 'active',
+      'paused': 'cancelled',
+      'cancelled': 'cancelled',
+      'pending': 'active', // Keep active while payment is processing
+    };
+
+    const newStatus = statusMap[mpSubscription.status] || 'active';
+    
+    // Update subscription status
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('mp_subscription_id', preapprovalId);
+
+    if (updateError) {
+      logger.error({ error: updateError.message, preapprovalId }, '[MP Webhook] Error updating subscription');
+      return;
+    }
+
+    logger.info({ 
+      preapprovalId, 
+      tenantId: subscription.tenant_id, 
+      status: newStatus 
+    }, '[MP Webhook] Subscription updated');
+
+  } catch (error) {
+    logger.error({ error: error.message, preapprovalId }, '[MP Webhook] Error processing subscription event');
+  }
+}
+
+/**
+ * Handle authorized payment events (monthly charges)
+ */
+async function handleAuthorizedPaymentEvent(paymentId, action) {
+  logger.info({ paymentId, action }, '[MP Webhook] Processing authorized payment event');
+
+  // When a monthly payment is successful, reset the message counter
+  // and extend the current period
+  
+  try {
+    // Get payment details to find associated subscription
+    // Note: In production, you'd call MP API to get payment details
+    // For now, we'll handle period updates based on subscription events
+    
+    logger.info({ paymentId }, '[MP Webhook] Authorized payment processed');
+  } catch (error) {
+    logger.error({ error: error.message, paymentId }, '[MP Webhook] Error processing payment');
+  }
+}
+
+module.exports = { verify, receive, handleMercadoPagoWebhook };
