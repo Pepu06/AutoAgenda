@@ -5,20 +5,6 @@ import Link from 'next/link';
 import { api } from '../../../lib/api';
 import s from './billing.module.css';
 
-const PLAN_NAMES = {
-  trial: 'Trial gratuito',
-  inicial: 'Plan Inicial',
-  profesional: 'Plan Profesional',
-  custom: 'Plan Custom',
-};
-
-const PLAN_PRICES = {
-  trial: 'Gratis',
-  inicial: '$25.000 ARS/mes',
-  profesional: '$55.000 ARS/mes',
-  custom: 'A medida',
-};
-
 export default function BillingPage() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
@@ -113,7 +99,7 @@ export default function BillingPage() {
         <div className={`${s.banner} ${s.bannerActive}`}>
           <div className={s.bannerIcon}>✅</div>
           <div className={s.bannerBody}>
-            <div className={s.bannerTitle}>{PLAN_NAMES[subscription.plan] || subscription.plan} activo</div>
+            <div className={s.bannerTitle}>{planDetails?.name || subscription.plan} activo</div>
             <div className={s.bannerDesc}>
               {subscription.currentPeriodEnd
                 ? `Próximo cobro: ${new Date(subscription.currentPeriodEnd).toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' })}`
@@ -174,11 +160,13 @@ export default function BillingPage() {
           <div className={s.cardTitle}>Detalles del plan</div>
           <div className={s.planRow}>
             <span className={s.planRowLabel}>Plan</span>
-            <span className={s.planRowValue}>{PLAN_NAMES[subscription?.plan] || subscription?.plan || '—'}</span>
+            <span className={s.planRowValue}>{planDetails?.name || subscription?.plan || '—'}</span>
           </div>
           <div className={s.planRow}>
             <span className={s.planRowLabel}>Precio</span>
-            <span className={s.planRowValue}>{PLAN_PRICES[subscription?.plan] || '—'}</span>
+            <span className={s.planRowValue}>
+              {planDetails?.price === 0 ? 'Gratis' : planDetails?.price ? `$${(planDetails.price / 1000).toFixed(1)}K ARS/mes` : '—'}
+            </span>
           </div>
           <div className={s.planRow}>
             <span className={s.planRowLabel}>Mensajes / mes</span>
