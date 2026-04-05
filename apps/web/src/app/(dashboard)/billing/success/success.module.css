@@ -1,0 +1,92 @@
+.page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: 24px;
+}
+
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 48px;
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(124, 131, 253, 0.08);
+}
+
+.icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #10B981;
+  color: white;
+  font-size: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1F2937;
+  margin: 0 0 16px;
+}
+
+.message {
+  font-size: 16px;
+  color: #6B7280;
+  margin: 0 0 32px;
+  line-height: 1.6;
+}
+
+.details {
+  background: #F8F9FE;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.detailLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 4px;
+}
+
+.detailValue {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1F2937;
+  margin: 0;
+  font-family: monospace;
+}
+
+.redirect {
+  font-size: 14px;
+  color: #9CA3AF;
+  margin: 24px 0;
+}
+
+.btn {
+  background: #7C83FD;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 32px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background: #6B73E8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(124, 131, 253, 0.3);
+}
