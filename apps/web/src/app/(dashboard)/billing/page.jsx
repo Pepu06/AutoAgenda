@@ -47,7 +47,7 @@ export default function BillingPage() {
 
   if (loading) {
     return (
-      <div className={s.page}>
+      <div className={`${s.page} ${s.pageLoading}`}>
         <div className={s.loading}><div className="spinner" /></div>
       </div>
     );

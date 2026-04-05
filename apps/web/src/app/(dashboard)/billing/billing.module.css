@@ -1,5 +1,12 @@
 .page {
+  width: 100%;
   max-width: 720px;
+  margin-inline: auto;
+}
+
+.pageLoading {
+  min-height: calc(100dvh - 72px);
+  display: flex;
 }
 
 .header {
@@ -233,4 +240,6 @@
   align-items: center;
   justify-content: center;
   min-height: 200px;
+  width: 100%;
+  flex: 1;
 }

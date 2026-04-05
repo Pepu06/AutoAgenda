@@ -44,7 +44,6 @@ export default function UpgradePage() {
 }
 
 function PlanCard({ plan, featured }) {
-  const [email, setEmail]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
 
@@ -54,17 +53,11 @@ function PlanCard({ plan, featured }) {
       return;
     }
 
-    if (!email.trim() || !email.includes('@')) {
-      setError('Ingresá un email válido para procesar el pago.');
-      return;
-    }
-
     setError('');
     setLoading(true);
     try {
       const res = await api.post('/subscription/checkout', {
         plan: plan.id,
-        payer: { email: email.trim() },
       });
       if (res.checkoutUrl) {
         window.location.href = res.checkoutUrl;
@@ -104,19 +97,6 @@ function PlanCard({ plan, featured }) {
 
       {plan.valueProposition && (
         <div className={s.valueProp}>{plan.valueProposition}</div>
-      )}
-
-      {!plan.contactRequired && (
-        <div className={s.emailWrap}>
-          <label className={s.emailLabel}>Email para el pago</label>
-          <input
-            type="email"
-            className={s.emailInput}
-            placeholder="tu@email.com"
-            value={email}
-            onChange={e => { setEmail(e.target.value); setError(''); }}
-          />
-        </div>
       )}
 
       {error && <div className={s.error}>{error}</div>}

@@ -64,19 +64,37 @@ async function getSubscription(req, res, next) {
 /**
  * POST /api/subscription/checkout
  * Create a checkout session for a plan upgrade
- * Body: { plan: 'inicial' | 'profesional' | 'custom', payer: { email, firstName, lastName } }
+ * Body: { plan: 'inicial' | 'profesional' | 'custom' }
+ * Uses authenticated user's email automatically
  */
 async function createCheckout(req, res, next) {
   try {
-    const { plan, payer } = req.body;
+    const { plan } = req.body;
 
     if (!plan || !['inicial', 'profesional', 'custom'].includes(plan)) {
       throw new ValidationError('Invalid plan. Must be "inicial", "profesional", or "custom"');
     }
 
-    if (!payer?.email) {
-      throw new ValidationError('Payer email is required');
+    // Get user email from database
+    logger.info({ userId: req.userId, tenantId: req.tenantId }, 'Fetching user email for checkout');
+    
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', req.userId)
+      .single();
+
+    if (userError) {
+      logger.error({ error: userError, userId: req.userId }, 'Error fetching user from database');
+      throw new NotFoundError('User not found');
     }
+
+    if (!user) {
+      logger.error({ userId: req.userId }, 'User not found in database');
+      throw new NotFoundError('User not found');
+    }
+    
+    logger.info({ email: user.email }, 'User email retrieved successfully');
 
     // Check if tenant already has an active paid subscription
     const { data: currentSub } = await supabase
@@ -89,9 +107,14 @@ async function createCheckout(req, res, next) {
       throw new ValidationError('You already have an active paid subscription. Please cancel it first to change plans.');
     }
 
+    // Build payer object with user's email
+    const payer = {
+      email: user.email,
+    };
+
     const subscriptionData = await createSubscription(req.tenantId, plan, payer);
 
-    logger.info({ tenantId: req.tenantId, plan }, 'Checkout session created');
+    logger.info({ tenantId: req.tenantId, plan, email: user.email }, 'Checkout session created');
 
     res.json({
       success: true,
