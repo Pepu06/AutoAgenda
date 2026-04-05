@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import s from './success.module.css';
 
-export default function BillingSuccessPage() {
+function SuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [countdown, setCountdown] = useState(5);
@@ -25,7 +25,6 @@ export default function BillingSuccessPage() {
   }, [router]);
 
   const preapprovalId = searchParams.get('preapproval_id');
-  const externalReference = searchParams.get('external_reference');
 
   return (
     <div className={s.page}>
@@ -55,5 +54,13 @@ export default function BillingSuccessPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function BillingSuccessPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 48, textAlign: 'center' }}>Cargando...</div>}>
+      <SuccessContent />
+    </Suspense>
   );
 }
