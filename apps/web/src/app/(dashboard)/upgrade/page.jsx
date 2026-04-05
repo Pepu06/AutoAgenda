@@ -47,26 +47,9 @@ function PlanCard({ plan, featured }) {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
 
-  async function handleCheckout() {
-    if (plan.contactRequired) {
-      window.location.href = 'mailto:hola@autoagenda.app?subject=Plan Custom';
-      return;
-    }
-
-    setError('');
-    setLoading(true);
-    try {
-      const res = await api.post('/subscription/checkout', {
-        plan: plan.id,
-      });
-      if (res.checkoutUrl) {
-        window.location.href = res.checkoutUrl;
-      }
-    } catch (err) {
-      setError(err?.message || 'Error al iniciar el pago. Intentá de nuevo.');
-    } finally {
-      setLoading(false);
-    }
+  function handleSelectPlan() {
+    // Redirigir a billing con el plan seleccionado
+    window.location.href = `/billing?selected_plan=${plan.id}`;
   }
 
   return (
@@ -103,11 +86,30 @@ function PlanCard({ plan, featured }) {
 
       <button
         className={plan.contactRequired ? s.btnSecondary : s.btnPrimary}
-        onClick={handleCheckout}
+        onClick={plan.contactRequired ? () => window.location.href = 'mailto:hola@autoagenda.app?subject=Plan Custom' : handleSelectPlan}
         disabled={loading}
       >
-        {loading ? 'Redirigiendo...' : plan.contactRequired ? 'Contactar →' : 'Contratar ahora →'}
+        {loading ? 'Cargando...' : plan.contactRequired ? 'Contactar →' : 'Seleccionar plan →'}
       </button>
+      
+      {!plan.contactRequired && (
+        <div className={s.paymentInfo}>
+          <div className={s.paymentTitle}>Datos para transferencia:</div>
+          <div className={s.paymentData}>
+            <div className={s.paymentRow}>
+              <span className={s.paymentLabel}>Alias:</span>
+              <span className={s.paymentValue}>pedrogsoro</span>
+            </div>
+            <div className={s.paymentRow}>
+              <span className={s.paymentLabel}>CBU:</span>
+              <span className={s.paymentValue}>0000003100096112065785</span>
+            </div>
+          </div>
+          <div className={s.paymentNote}>
+            Después de transferir, subí tu comprobante en Facturación para activar el plan.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
