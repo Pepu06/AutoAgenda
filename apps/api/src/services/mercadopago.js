@@ -23,18 +23,18 @@ const PLANS = {
   inicial: {
     name: 'Plan Inicial',
     subtitle: 'Ideal para profesionales independientes',
-    price: 25000, // $25.000 ARS/mes
+    price: 2500, // $2.500 ARS/mes
     messageLimit: 100,
     calendarsLimit: 1,
     extraMessagePrice: 150, // $150 ARS por mensaje adicional
     currency: 'ARS',
     description: '1 agenda de Google Calendar, 100 recordatorios de WhatsApp al mes',
-    valueProposition: 'Si un paciente falta a una consulta de $40.000 ARS, perdiste esa plata. Si invertís $25.000 en AutoAgenda, con que salves un solo turno que se iba a perder, la app ya se pagó sola y te dio ganancia.',
+    valueProposition: 'Si un paciente falta a una consulta de $40.000 ARS, perdiste esa plata. Si invertís $2.500 en AutoAgenda, con que salves un solo turno que se iba a perder, la app ya se pagó sola y te dio ganancia.',
   },
   profesional: {
     name: 'Plan Profesional',
     subtitle: 'Para consultorios médicos e inmobiliarias',
-    price: 55000, // $55.000 ARS/mes
+    price: 5500, // $5.500 ARS/mes
     messageLimit: 500,
     calendarsLimit: 3,
     extraMessagePrice: 120, // $120 ARS por mensaje adicional
@@ -45,7 +45,7 @@ const PLANS = {
   custom: {
     name: 'Plan Custom',
     subtitle: 'B2B Corporativo',
-    price: 120000, // Desde $120.000 ARS
+    price: 12000, // Desde $12.000 ARS
     messageLimit: null, // unlimited
     calendarsLimit: null, // unlimited
     extraMessagePrice: 0,
