@@ -115,6 +115,7 @@ async function uploadPaymentProof({ tenantId, tenantName, tenantEmail, plan, mim
       tenantName: String(tenantName || ''),
       tenantEmail: String(tenantEmail || ''),
       plan: String(plan || ''),
+      status: 'pending',
     },
   };
 
@@ -164,6 +165,7 @@ async function listPaymentProofs() {
     `'${folderId}' in parents`,
     'trashed = false',
     "appProperties has { key='autoagendaType' and value='paymentProof' }",
+    "appProperties has { key='status' and value='pending' }",
   ].join(' and ');
 
   const params = new URLSearchParams({
@@ -219,10 +221,35 @@ async function getPaymentProofById(fileId) {
   };
 }
 
+async function updatePaymentProofStatus(fileId, status) {
+  const accessToken = await getDriveAccessToken();
+
+  const res = await fetch(`${DRIVE_API_BASE}/files/${encodeURIComponent(fileId)}?fields=id`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      appProperties: {
+        status: status, // 'approved' or 'rejected'
+      },
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || 'Could not update payment proof status');
+  }
+
+  return data;
+}
+
 module.exports = {
   uploadPaymentProof,
   listPaymentProofs,
   getPaymentProofById,
+  updatePaymentProofStatus,
   async downloadPaymentProof(fileId) {
     const accessToken = await getDriveAccessToken();
 

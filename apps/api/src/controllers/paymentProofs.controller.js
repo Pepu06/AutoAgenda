@@ -1,7 +1,7 @@
 const { supabase } = require('@autoagenda/db');
 const env = require('../config/env');
 const { ValidationError, ForbiddenError, NotFoundError } = require('../errors');
-const { uploadPaymentProof, listPaymentProofs, getPaymentProofById, downloadPaymentProof } = require('../services/googleDrive');
+const { uploadPaymentProof, listPaymentProofs, getPaymentProofById, downloadPaymentProof, updatePaymentProofStatus } = require('../services/googleDrive');
 const logger = require('../config/logger');
 
 function assertAdminPassword(req) {
@@ -202,6 +202,9 @@ async function approvePaymentProof(req, res, next) {
 
     if (error) throw error;
 
+    // Mark proof as approved in Google Drive
+    await updatePaymentProofStatus(proofId, 'approved');
+
     logger.info({ proofId, tenantId: proof.tenantId, plan: dbPlan }, 'Payment proof approved and subscription updated');
 
     return res.json({
@@ -232,9 +235,31 @@ async function getAdminPaymentProofImage(req, res, next) {
   }
 }
 
+async function rejectPaymentProof(req, res, next) {
+  try {
+    assertAdminPassword(req);
+
+    const { proofId } = req.params;
+    if (!proofId) throw new ValidationError('proofId es requerido');
+
+    // Mark proof as rejected in Google Drive
+    await updatePaymentProofStatus(proofId, 'rejected');
+
+    logger.info({ proofId }, 'Payment proof rejected');
+
+    return res.json({
+      success: true,
+      message: 'Comprobante rechazado',
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   createPaymentProof,
   getAdminPaymentProofs,
   approvePaymentProof,
+  rejectPaymentProof,
   getAdminPaymentProofImage,
 };
