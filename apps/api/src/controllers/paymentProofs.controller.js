@@ -165,19 +165,40 @@ async function approvePaymentProof(req, res, next) {
     const currentPeriodEnd = new Date(now);
     currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
 
-    const { error } = await supabase
+    // Check if subscription exists
+    const { data: existing } = await supabase
       .from('subscriptions')
-      .upsert({
-        tenant_id: proof.tenantId,
-        plan: dbPlan,
-        status: 'active',
-        current_period_start: now.toISOString(),
-        current_period_end: currentPeriodEnd.toISOString(),
-        cancel_at_period_end: false,
-        updated_at: now.toISOString(),
-      }, {
-        onConflict: 'tenant_id',
-      });
+      .select('id')
+      .eq('tenant_id', proof.tenantId)
+      .maybeSingle();
+
+    let error;
+    if (existing) {
+      // Update existing subscription
+      ({ error } = await supabase
+        .from('subscriptions')
+        .update({
+          plan: dbPlan,
+          status: 'active',
+          current_period_start: now.toISOString(),
+          current_period_end: currentPeriodEnd.toISOString(),
+          cancel_at_period_end: false,
+          updated_at: now.toISOString(),
+        })
+        .eq('tenant_id', proof.tenantId));
+    } else {
+      // Insert new subscription (let DB generate ID via default)
+      ({ error } = await supabase
+        .from('subscriptions')
+        .insert({
+          tenant_id: proof.tenantId,
+          plan: dbPlan,
+          status: 'active',
+          current_period_start: now.toISOString(),
+          current_period_end: currentPeriodEnd.toISOString(),
+          cancel_at_period_end: false,
+        }));
+    }
 
     if (error) throw error;
 

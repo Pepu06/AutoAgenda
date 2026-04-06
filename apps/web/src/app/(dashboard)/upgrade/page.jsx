@@ -67,7 +67,7 @@ function PlanCard({ plan, featured }) {
         <div className={s.planPrice} style={{ fontSize: 20 }}>A medida</div>
       ) : (
         <div className={s.planPrice}>
-          ${(plan.price / 1000).toFixed(0)}K
+          ${plan.price.toLocaleString('es-AR')}
         </div>
       )}
       <div className={s.planPriceSub}>
@@ -110,7 +110,7 @@ function PlanCard({ plan, featured }) {
               </div>
               <div className={s.paymentRow}>
                 <span className={s.paymentLabel}>Monto:</span>
-                <span className={s.paymentValue}>${(plan.price / 1000).toFixed(1)}K ARS</span>
+                <span className={s.paymentValue}>${plan.price.toLocaleString('es-AR')} ARS</span>
               </div>
             </div>
             <div className={s.paymentNote}>
