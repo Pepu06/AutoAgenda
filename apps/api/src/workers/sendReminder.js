@@ -80,7 +80,7 @@ async function sendReminder({ appointmentId }) {
 
   const { error: updateError } = await supabase
     .from('appointments')
-    .update({ status: 'pending' })
+    .update({ status: 'pending', reminder_sent_at: new Date().toISOString() })
     .eq('id', appointmentId)
     .eq('tenant_id', appointment.tenant_id);
 
