@@ -1,6 +1,6 @@
 const { supabase } = require('@autoagenda/db');
 const { getCalendarEvent, updateEventTitleAndColor, refreshAccessToken } = require('../services/google');
-const { sendTemplate } = require('../services/whatsapp');
+const { sendTemplate, sendTextMessage } = require('../services/whatsapp');
 const { getSubscriptionStatus } = require('../services/mercadopago');
 const env = require('../config/env');
 const logger = require('../config/logger');
@@ -134,6 +134,33 @@ async function processMessage(message, _metadata) {
   if (logError) throw logError;
 
   logger.info({ appointmentId: appointment.id, status: newStatus }, 'Appointment status updated via WhatsApp');
+
+  // Send reply message to client (best effort)
+  try {
+    const { data: replyTenant } = await supabase
+      .from('tenants')
+      .select('confirm_reply_message, cancel_reply_message, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key')
+      .eq('id', appointment.tenant_id)
+      .single();
+
+    const replyText = newStatus === 'confirmed'
+      ? replyTenant?.confirm_reply_message
+      : replyTenant?.cancel_reply_message;
+
+    if (replyText) {
+      const clientPhone = from.startsWith('+') ? from : `+${from}`;
+      const tenantConfig = {
+        provider: replyTenant.whatsapp_provider || 'meta',
+        whatsappPhoneNumberId: replyTenant.whatsapp_phone_number_id,
+        whatsappAccessToken: replyTenant.whatsapp_access_token,
+        wasender_api_key: replyTenant.wasender_api_key,
+      };
+      await sendTextMessage(clientPhone, replyText, tenantConfig);
+      logger.info({ appointmentId: appointment.id, newStatus }, 'Reply message sent to client');
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Failed to send reply message to client');
+  }
 
   // Notify admin on cancellation (best effort)
   if (newStatus === 'cancelled') {

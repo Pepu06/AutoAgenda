@@ -33,6 +33,8 @@ const DEFAULTS = {
   reminderTime: '10:00',
   locationMode: 'fixed',
   location: '',
+  confirmReplyMessage: '',
+  cancelReplyMessage: '',
 };
 
 const WEEK_DAYS = [
@@ -84,6 +86,8 @@ export default function SettingsPage() {
       if (d.reminderTime != null) mapped.reminderTime = d.reminderTime;
       if (d.locationMode != null) mapped.locationMode = d.locationMode;
       if (d.location     != null) mapped.location     = d.location;
+      if (d.confirmReplyMessage != null) mapped.confirmReplyMessage = d.confirmReplyMessage;
+      if (d.cancelReplyMessage  != null) mapped.cancelReplyMessage  = d.cancelReplyMessage;
       setSettings(s => ({ ...s, ...mapped }));
     }).catch(() => { }).finally(() => setLoading(false));
   }, []);
@@ -114,6 +118,8 @@ export default function SettingsPage() {
         reminder_time: settings.reminderTime,
         location_mode: settings.locationMode,
         location:      settings.location,
+        confirm_reply_message: settings.confirmReplyMessage,
+        cancel_reply_message:  settings.cancelReplyMessage,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -245,6 +251,40 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+          </Field>
+        </div>
+      </section>
+
+      {/* RESPUESTAS AUTOMÁTICAS */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Respuestas automáticas</h2>
+          <p className={styles.sectionDesc}>Mensajes que el bot envía al cliente cuando confirma o cancela su turno</p>
+        </div>
+        <div className={styles.fields}>
+          <Field
+            label="Mensaje al confirmar"
+            hint="Se envía cuando el cliente toca 'Confirmar'. Dejá vacío para no enviar nada."
+          >
+            <textarea
+              className={styles.textarea}
+              value={settings.confirmReplyMessage}
+              onChange={e => set('confirmReplyMessage', e.target.value)}
+              rows={3}
+              placeholder="Ej: ¡Perfecto! Tu turno está confirmado. ¡Te esperamos!"
+            />
+          </Field>
+          <Field
+            label="Mensaje al cancelar"
+            hint="Se envía cuando el cliente toca 'Cancelar'. Dejá vacío para no enviar nada."
+          >
+            <textarea
+              className={styles.textarea}
+              value={settings.cancelReplyMessage}
+              onChange={e => set('cancelReplyMessage', e.target.value)}
+              rows={3}
+              placeholder="Ej: Entendido, tu turno fue cancelado. ¡Cuando quieras podés sacar un nuevo turno!"
+            />
           </Field>
         </div>
       </section>

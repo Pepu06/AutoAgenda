@@ -10,6 +10,7 @@ const ALLOWED_FIELDS = [
   'report_days', 'report_type',
   'wasender_connected',
   'location_mode', 'location',
+  'confirm_reply_message', 'cancel_reply_message',
 ];
 
 const SELECT_COLS = ['id', 'name', 'slug', ...ALLOWED_FIELDS].join(', ');
