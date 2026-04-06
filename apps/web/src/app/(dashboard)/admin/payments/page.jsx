@@ -179,12 +179,39 @@ function PaymentProofCard({ proof, onActionDone }) {
   }
 
   async function handleReject() {
-    if (!adminWhatsappLink) {
-      alert('Este cliente no tiene admin_whatsapp configurado.');
+    if (!confirm('¿Estás seguro de rechazar este comprobante?')) {
       return;
     }
 
-    window.open(adminWhatsappLink, '_blank', 'noopener,noreferrer');
+    try {
+      setProcessing(true);
+      const adminPassword = sessionStorage.getItem('admin_auth_password') || 'autoagenda2026';
+      const res = await fetch(`${API_URL}/admin/payment-proofs/${proof.id}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': adminPassword,
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || 'No se pudo rechazar el comprobante');
+      }
+
+      alert('❌ Comprobante rechazado');
+      
+      // Abrir WhatsApp si está configurado
+      if (adminWhatsappLink) {
+        window.open(adminWhatsappLink, '_blank', 'noopener,noreferrer');
+      }
+      
+      if (onActionDone) onActionDone();
+    } catch (err) {
+      alert(err?.message || 'No se pudo rechazar el comprobante');
+    } finally {
+      setProcessing(false);
+    }
   }
 
   return (
