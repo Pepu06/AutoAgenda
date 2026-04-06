@@ -8,12 +8,17 @@ const { trackMessageSent } = require('./usageTracking');
 async function sendConfirmation({ appointmentId }) {
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('*, contact:contacts(name, phone), service:services(name), tenant:tenants(timezone, time_format, business_name, reminder_type, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode)')
+    .select('*, contact:contacts(name, phone), service:services(name), tenant:tenants(timezone, time_format, business_name, reminder_type, messaging_enabled, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode)')
     .eq('id', appointmentId)
     .maybeSingle();
 
   if (!appointment) {
     logger.warn({ appointmentId }, 'Appointment not found for confirmation');
+    return;
+  }
+
+  if (appointment.tenant?.messaging_enabled === false) {
+    logger.info({ appointmentId }, 'Skipping confirmation, messaging disabled');
     return;
   }
 

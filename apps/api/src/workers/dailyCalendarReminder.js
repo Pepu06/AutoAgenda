@@ -49,7 +49,7 @@ async function runDailyReminders() {
       google_event_id,
       contact:contacts(name, phone),
       service:services(name),
-      tenant:tenants(business_name, message_template, timezone, time_format, reminder_type, reminder_time, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode)
+      tenant:tenants(business_name, message_template, messaging_enabled, timezone, time_format, reminder_type, reminder_time, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode)
     `)
     .in('status', ['pending', 'notified', 'confirmed'])
     .is('reminder_sent_at', null)
@@ -63,6 +63,10 @@ async function runDailyReminders() {
 
   for (const appt of appointments || []) {
     if (!appt?.contact?.phone) continue;
+    if (appt?.tenant?.messaging_enabled === false) {
+      logger.info({ appointmentId: appt?.id }, 'Skipping daily reminder, messaging disabled');
+      continue;
+    }
     if (!hasReminderConfig(appt?.tenant)) {
       logger.warn({ appointmentId: appt?.id, tenantId: appt?.tenant_id }, 'Skipping daily recordatorio_turno: missing business_name or message_template');
       continue;

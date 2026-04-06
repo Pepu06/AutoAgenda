@@ -13,12 +13,17 @@ function hasReminderConfig(tenant) {
 async function sendFollowUp({ appointmentId }) {
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('*, contact:contacts(*), service:services(*), tenant:tenants(timezone, time_format, business_name, message_template, location, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key)')
+    .select('*, contact:contacts(*), service:services(*), tenant:tenants(timezone, time_format, business_name, message_template, messaging_enabled, location, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key)')
     .eq('id', appointmentId)
     .maybeSingle();
 
   if (!appointment) {
     logger.warn({ appointmentId }, 'Appointment not found for follow-up');
+    return;
+  }
+
+  if (appointment.tenant?.messaging_enabled === false) {
+    logger.info({ appointmentId }, 'Skipping follow-up, messaging disabled');
     return;
   }
 
