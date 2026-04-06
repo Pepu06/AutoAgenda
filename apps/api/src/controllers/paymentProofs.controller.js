@@ -152,6 +152,15 @@ async function approvePaymentProof(req, res, next) {
       throw new ValidationError('El comprobante no tiene un plan válido para aprobar');
     }
 
+    // Mapear nombres del frontend a enums de la DB
+    const planMapping = {
+      inicial: 'basic',
+      profesional: 'pro',
+      custom: 'pro', // custom también usa pro
+    };
+
+    const dbPlan = planMapping[proof.plan];
+
     const now = new Date();
     const currentPeriodEnd = new Date(now);
     currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
@@ -160,7 +169,7 @@ async function approvePaymentProof(req, res, next) {
       .from('subscriptions')
       .upsert({
         tenant_id: proof.tenantId,
-        plan: proof.plan,
+        plan: dbPlan,
         status: 'active',
         current_period_start: now.toISOString(),
         current_period_end: currentPeriodEnd.toISOString(),
@@ -172,13 +181,13 @@ async function approvePaymentProof(req, res, next) {
 
     if (error) throw error;
 
-    logger.info({ proofId, tenantId: proof.tenantId, plan: proof.plan }, 'Payment proof approved and subscription updated');
+    logger.info({ proofId, tenantId: proof.tenantId, plan: dbPlan }, 'Payment proof approved and subscription updated');
 
     return res.json({
       success: true,
       message: `Plan ${proof.plan} activado para el tenant.`,
       tenantId: proof.tenantId,
-      plan: proof.plan,
+      plan: dbPlan,
     });
   } catch (error) {
     return next(error);

@@ -81,8 +81,8 @@ export default function UploadProofPage() {
         <div className={s.row}>
           <label className={s.label}>Plan</label>
           <select className={s.input} value={plan} onChange={e => setPlan(e.target.value)}>
-            <option value="inicial">Inicial</option>
-            <option value="profesional">Profesional</option>
+            <option value="basic">Inicial</option>
+            <option value="pro">Profesional</option>
             <option value="custom">Custom</option>
           </select>
         </div>
@@ -100,18 +100,34 @@ export default function UploadProofPage() {
         )}
 
         {error && <div className={s.error}>{error}</div>}
+
         {ok && (
-          <div className={s.success}>
-            Comprobante enviado. Lo vamos a revisar y te avisamos por email.
+          <div className={s.successCard}>
+            <div className={s.successIcon}>
+              <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+                <circle cx="28" cy="28" r="28" fill="#10B981" opacity="0.1"/>
+                <circle cx="28" cy="28" r="22" fill="#10B981"/>
+                <path d="M22 28L26 32L34 24" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className={s.successTitle}>¡Comprobante enviado!</div>
+            <div className={s.successMessage}>
+              Recibimos tu comprobante. Lo vamos a revisar en las próximas 24hs y activaremos tu plan.
+            </div>
+            <Link href="/billing" className={s.btnSuccess}>
+              Ver mi facturación →
+            </Link>
           </div>
         )}
 
-        <div className={s.actions}>
-          <Link href="/upgrade" className={s.btnSecondary}>Volver a planes</Link>
-          <button type="submit" className={s.btnPrimary} disabled={loading}>
-            {loading ? 'Enviando...' : 'Enviar comprobante'}
-          </button>
-        </div>
+        {!ok && (
+          <div className={s.actions}>
+            <Link href="/upgrade" className={s.btnSecondary}>Volver a planes</Link>
+            <button type="submit" className={s.btnPrimary} disabled={loading}>
+              {loading ? 'Enviando...' : 'Enviar comprobante'}
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );
