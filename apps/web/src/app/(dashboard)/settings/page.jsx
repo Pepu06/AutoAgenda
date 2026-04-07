@@ -203,22 +203,6 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* PROVEEDOR DE WHATSAPP — Meta Business API */}
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>WhatsApp Business API</h2>
-          <p className={styles.sectionDesc}>Credenciales de Meta para el envío de mensajes</p>
-        </div>
-        <div className={styles.fields}>
-          <Field label="Phone Number ID">
-            <input className={styles.input} type="password" value={settings.whatsappPhoneNumberId} onChange={e => set('whatsappPhoneNumberId', e.target.value)} placeholder="Ej: 123456789012345" />
-          </Field>
-          <Field label="Access Token" hint="Lo encontrás en Meta for Developers → Tu App → WhatsApp → API Setup.">
-            <input className={styles.input} type="password" value={settings.whatsappAccessToken} onChange={e => set('whatsappAccessToken', e.target.value)} placeholder="EAAxxxxxxxxx..." />
-          </Field>
-        </div>
-      </section>
-
       {/* MENSAJE */}
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
