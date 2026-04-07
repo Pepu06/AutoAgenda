@@ -1,6 +1,5 @@
 const cron = require('node-cron');
 const { supabase } = require('@autoagenda/db');
-const { sendTextMessage } = require('../services/whatsapp');
 const { sendEmail } = require('../services/email');
 const { getPlanConfig } = require('../services/mercadopago');
 const env = require('../config/env');
@@ -16,14 +15,6 @@ function buildRenewalContent(planName, price, expiresAt) {
   if (cbu) paymentLines.push(`CBU: ${cbu}`);
   if (alias) paymentLines.push(`Alias: ${alias}`);
   const paymentText = paymentLines.join('\n');
-
-  const whatsapp =
-    `⏰ *Recordatorio de renovación - AutoAgenda*\n\n` +
-    `Tu suscripción al *${planName}* vence el *${expiresAt}*.\n\n` +
-    `Para continuar usando el servicio, realizá una transferencia de *${price}/mes* a:\n\n` +
-    `${paymentLines.map(l => `💳 ${l}`).join('\n')}\n\n` +
-    `Una vez realizada la transferencia, subí el comprobante desde el panel en AutoAgenda y lo activamos en el día.\n\n` +
-    `¿Consultas? Respondé este mensaje.`;
 
   const emailSubject = `⏰ Tu suscripción a AutoAgenda vence el ${expiresAt}`;
 
@@ -47,11 +38,11 @@ function buildRenewalContent(planName, price, expiresAt) {
     `${paymentText}\n\n` +
     `Una vez realizada la transferencia, subí el comprobante desde el panel en AutoAgenda y lo activamos en el día.`;
 
-  return { whatsapp, emailSubject, emailHtml, emailText };
+  return { emailSubject, emailHtml, emailText };
 }
 
 /**
- * Sends WhatsApp + email reminders to tenants whose subscription expires in ~3 days.
+ * Sends email reminders to tenants whose subscription expires in ~3 days.
  */
 async function sendRenewalReminders() {
   logger.info('[RenewalCron] Checking subscriptions expiring in 3 days...');
@@ -80,23 +71,15 @@ async function sendRenewalReminders() {
 
   const tenantIds = subscriptions.map(s => s.tenant_id);
 
-  const { data: tenants } = await supabase
-    .from('tenants')
-    .select('id, admin_whatsapp, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key')
-    .in('id', tenantIds);
-
-  // Get owner emails for each tenant
   const { data: users } = await supabase
     .from('users')
     .select('tenant_id, email')
     .in('tenant_id', tenantIds)
     .eq('role', 'owner');
 
-  const tenantMap = (tenants || []).reduce((acc, t) => { acc[t.id] = t; return acc; }, {});
   const emailMap = (users || []).reduce((acc, u) => { acc[u.tenant_id] = u.email; return acc; }, {});
 
   for (const sub of subscriptions) {
-    const tenant = tenantMap[sub.tenant_id];
     const ownerEmail = emailMap[sub.tenant_id];
 
     const planConfig = getPlanConfig(sub.plan);
@@ -104,36 +87,19 @@ async function sendRenewalReminders() {
     const price = planConfig?.price ? `$${planConfig.price.toLocaleString('es-AR')} ARS` : '';
     const expiresAt = new Date(sub.current_period_end).toLocaleDateString('es-AR');
 
-    const { whatsapp, emailSubject, emailHtml, emailText } = buildRenewalContent(planName, price, expiresAt);
+    const { emailSubject, emailHtml, emailText } = buildRenewalContent(planName, price, expiresAt);
 
-    // Send WhatsApp
-    if (tenant?.admin_whatsapp) {
-      const tenantConfig = {
-        provider: tenant.whatsapp_provider || 'meta',
-        whatsappPhoneNumberId: tenant.whatsapp_phone_number_id,
-        whatsappAccessToken: tenant.whatsapp_access_token,
-        wasender_api_key: tenant.wasender_api_key,
-      };
-      try {
-        await sendTextMessage(tenant.admin_whatsapp, whatsapp, tenantConfig);
-        logger.info({ tenantId: sub.tenant_id, plan: sub.plan }, '[RenewalCron] WhatsApp reminder sent');
-      } catch (err) {
-        logger.error({ tenantId: sub.tenant_id, err: err.message }, '[RenewalCron] WhatsApp reminder failed');
-      }
+    if (!env.GMAIL_USER) {
+      logger.warn({ tenantId: sub.tenant_id }, '[RenewalCron] GMAIL_USER not configured, skipping email');
+    } else if (!ownerEmail) {
+      logger.warn({ tenantId: sub.tenant_id }, '[RenewalCron] No owner email found, skipping email');
     } else {
-      logger.warn({ tenantId: sub.tenant_id }, '[RenewalCron] No admin_whatsapp, skipping WhatsApp');
-    }
-
-    // Send email
-    if (ownerEmail && env.RESEND_API_KEY) {
       try {
         await sendEmail({ to: ownerEmail, subject: emailSubject, text: emailText, html: emailHtml });
         logger.info({ tenantId: sub.tenant_id, email: ownerEmail }, '[RenewalCron] Email reminder sent');
       } catch (err) {
         logger.error({ tenantId: sub.tenant_id, err: err.message }, '[RenewalCron] Email reminder failed');
       }
-    } else if (!ownerEmail) {
-      logger.warn({ tenantId: sub.tenant_id }, '[RenewalCron] No owner email found, skipping email');
     }
   }
 

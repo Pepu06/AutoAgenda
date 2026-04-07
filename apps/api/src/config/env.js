@@ -30,8 +30,8 @@ const envSchema = z.object({
   ADMIN_PANEL_PASSWORD:        z.string().optional().default('autoagenda2026'),
   PAYMENT_CBU:                 z.string().optional().default(''),
   PAYMENT_ALIAS:               z.string().optional().default(''),
-  RESEND_API_KEY:              z.string().optional().default(''),
-  EMAIL_FROM:                  z.string().optional().default('AutoAgenda <noreply@autoagenda.com>'),
+  GMAIL_USER:                  z.string().optional().default(''),
+  GMAIL_APP_PASSWORD:          z.string().optional().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -76,7 +76,6 @@ async function sendConfirmation({ appointmentId }) {
     wasender_api_key: appointment.tenant?.wasender_api_key,
   };
   
-  /* TODO: re-enable confirmacion_turno template when ready
   await sendTemplate(appointment.contact.phone, 'confirmacion_turno', {
     body: [
       appointment.contact.name,
@@ -89,7 +88,6 @@ async function sendConfirmation({ appointmentId }) {
     ],
   }, tenantConfig);
   await trackMessageSent(appointment.tenant_id, 'confirmation');
-  */
 
   const { error: updateError } = await supabase
     .from('appointments')

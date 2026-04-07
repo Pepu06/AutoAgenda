@@ -1,21 +1,27 @@
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 const env = require('../config/env');
 const logger = require('../config/logger');
 
-let resend = null;
+let transporter = null;
 
-function getClient() {
-  if (!resend) {
-    if (!env.RESEND_API_KEY) {
-      throw new Error('RESEND_API_KEY not configured');
+function getTransporter() {
+  if (!transporter) {
+    if (!env.GMAIL_USER || !env.GMAIL_APP_PASSWORD) {
+      throw new Error('GMAIL_USER and GMAIL_APP_PASSWORD not configured');
     }
-    resend = new Resend(env.RESEND_API_KEY);
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: env.GMAIL_USER,
+        pass: env.GMAIL_APP_PASSWORD,
+      },
+    });
   }
-  return resend;
+  return transporter;
 }
 
 /**
- * Send a plain-text email.
+ * Send an email via Gmail.
  * @param {object} opts
  * @param {string} opts.to - Recipient email
  * @param {string} opts.subject - Subject line
@@ -23,23 +29,18 @@ function getClient() {
  * @param {string} [opts.html] - Optional HTML body
  */
 async function sendEmail({ to, subject, text, html }) {
-  const client = getClient();
+  const t = getTransporter();
 
-  const { data, error } = await client.emails.send({
-    from: env.EMAIL_FROM,
+  const info = await t.sendMail({
+    from: `AutoAgenda <${env.GMAIL_USER}>`,
     to,
     subject,
     text,
     ...(html ? { html } : {}),
   });
 
-  if (error) {
-    logger.error({ to, subject, error: error.message }, '[Email] Send failed');
-    throw new Error(error.message);
-  }
-
-  logger.info({ to, subject, id: data?.id }, '[Email] Sent');
-  return data;
+  logger.info({ to, subject, messageId: info.messageId }, '[Email] Sent');
+  return info;
 }
 
 module.exports = { sendEmail };
