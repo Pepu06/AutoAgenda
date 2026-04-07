@@ -9,7 +9,6 @@ const STEP_LABELS = {
   business_info:    'Nombre del negocio',
   google_calendar:  'Google Calendar conectado',
   calendar_format:  'Formato de eventos entendido',
-  whatsapp:         'WhatsApp configurado',
   first_service:    'Al menos un servicio creado',
   message_template: 'Mensaje de recordatorio configurado',
 };
@@ -44,7 +43,6 @@ export default function EnableMessaging({ steps, onBack }) {
     business_info:    '/setup',
     google_calendar:  '/setup',
     calendar_format:  '/setup',
-    whatsapp:         '/setup',
     first_service:    '/services',
     message_template: '/setup',
   };

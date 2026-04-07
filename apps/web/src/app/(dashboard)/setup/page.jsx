@@ -6,7 +6,6 @@ import styles from './setup.module.css';
 import BusinessInfo from './steps/BusinessInfo';
 import GoogleCalendar from './steps/GoogleCalendar';
 import CalendarFormat from './steps/CalendarFormat';
-import WhatsAppConfig from './steps/WhatsAppConfig';
 import FirstService from './steps/FirstService';
 import MessageTemplate from './steps/MessageTemplate';
 import EnableMessaging from './steps/EnableMessaging';
@@ -15,11 +14,12 @@ const STEP_NAMES = [
   'Tu negocio',
   'Google Calendar',
   'Formato eventos',
-  'WhatsApp',
   'Servicios',
   'Mensaje',
   'Activar',
 ];
+
+const STEP_KEYS = ['business_info', 'google_calendar', 'calendar_format', 'first_service', 'message_template', 'enable_messaging'];
 
 export default function SetupPage() {
   const [currentStep, setCurrentStep] = useState(0);
@@ -37,10 +37,8 @@ export default function SetupPage() {
       setOnboarding(ob.data);
       setSettings(st.data);
       setServices(sv.data || []);
-      // Empezar en el primer paso incompleto
-      const stepKeys = ['business_info','google_calendar','calendar_format','whatsapp','first_service','message_template','enable_messaging'];
-      const firstIncomplete = stepKeys.findIndex(k => !ob.data?.steps?.[k]?.done);
-      setCurrentStep(firstIncomplete >= 0 ? firstIncomplete : 6);
+      const firstIncomplete = STEP_KEYS.findIndex(k => !ob.data?.steps?.[k]?.done);
+      setCurrentStep(firstIncomplete >= 0 ? firstIncomplete : STEP_KEYS.length - 1);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -48,69 +46,21 @@ export default function SetupPage() {
     api.get('/settings/onboarding').then(res => setOnboarding(res.data)).catch(() => {});
   }
 
-  function goNext() {
-    refreshOnboarding();
-    setCurrentStep(s => Math.min(s + 1, 6));
-  }
+  const total = STEP_NAMES.length - 1;
+  function goNext() { refreshOnboarding(); setCurrentStep(s => Math.min(s + 1, total)); }
   function goBack() { setCurrentStep(s => Math.max(s - 1, 0)); }
-  function goSkip() { setCurrentStep(s => Math.min(s + 1, 6)); }
+  function goSkip() { setCurrentStep(s => Math.min(s + 1, total)); }
 
   const steps = onboarding?.steps || {};
 
   function renderStep() {
     switch (currentStep) {
-      case 0: return (
-        <BusinessInfo
-          data={settings}
-          onNext={goNext}
-          onSkip={goSkip}
-        />
-      );
-      case 1: return (
-        <GoogleCalendar
-          done={steps.google_calendar?.done}
-          onNext={goNext}
-          onBack={goBack}
-          onSkip={goSkip}
-        />
-      );
-      case 2: return (
-        <CalendarFormat
-          onNext={goNext}
-          onBack={goBack}
-          onSkip={goSkip}
-        />
-      );
-      case 3: return (
-        <WhatsAppConfig
-          data={settings}
-          onNext={goNext}
-          onBack={goBack}
-          onSkip={goSkip}
-        />
-      );
-      case 4: return (
-        <FirstService
-          services={services}
-          onNext={goNext}
-          onBack={goBack}
-          onSkip={goSkip}
-        />
-      );
-      case 5: return (
-        <MessageTemplate
-          data={settings}
-          onNext={goNext}
-          onBack={goBack}
-          onSkip={goSkip}
-        />
-      );
-      case 6: return (
-        <EnableMessaging
-          steps={steps}
-          onBack={goBack}
-        />
-      );
+      case 0: return <BusinessInfo data={settings} onNext={goNext} onSkip={goSkip} />;
+      case 1: return <GoogleCalendar done={steps.google_calendar?.done} onNext={goNext} onBack={goBack} onSkip={goSkip} />;
+      case 2: return <CalendarFormat onNext={goNext} onBack={goBack} onSkip={goSkip} />;
+      case 3: return <FirstService services={services} onNext={goNext} onBack={goBack} onSkip={goSkip} />;
+      case 4: return <MessageTemplate data={settings} onNext={goNext} onBack={goBack} onSkip={goSkip} />;
+      case 5: return <EnableMessaging steps={steps} onBack={goBack} />;
       default: return null;
     }
   }
@@ -124,11 +74,9 @@ export default function SetupPage() {
         <p className={styles.subtitle}>Seguí estos pasos para dejar AutoAgenda listo para usar.</p>
       </div>
 
-      {/* Step indicator */}
       <div className={styles.stepper}>
         {STEP_NAMES.map((name, i) => {
-          const stepKeys = ['business_info','google_calendar','calendar_format','whatsapp','first_service','message_template','enable_messaging'];
-          const isDone = steps[stepKeys[i]]?.done;
+          const isDone = steps[STEP_KEYS[i]]?.done;
           const isCurrent = i === currentStep;
           return (
             <div key={i} className={styles.stepItem}>

@@ -46,26 +46,16 @@ async function updateSettings(req, res, next) {
     if (updates.messaging_enabled === true) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('business_name, message_template, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key')
+        .select('business_name, message_template')
         .eq('id', req.tenantId)
         .single();
 
       const missing = [];
       const businessName = String(updates.business_name || tenant?.business_name || '').trim();
       const messageTemplate = String(updates.message_template || tenant?.message_template || '').trim();
-      const provider = updates.whatsapp_provider || tenant?.whatsapp_provider || 'meta';
 
       if (!businessName) missing.push('Nombre del negocio');
       if (!messageTemplate) missing.push('Mensaje personalizable');
-
-      if (provider === 'wasender') {
-        const wasenderKey = String(updates.wasender_api_key || tenant?.wasender_api_key || '').trim();
-        if (!wasenderKey) missing.push('API Key de WasenderAPI');
-      } else {
-        const phoneId = String(updates.whatsapp_phone_number_id || tenant?.whatsapp_phone_number_id || '').trim();
-        const token = String(updates.whatsapp_access_token || tenant?.whatsapp_access_token || '').trim();
-        if (!phoneId || !token) missing.push('Credenciales de WhatsApp Business (Phone Number ID y Access Token)');
-      }
 
       if (missing.length > 0) {
         throw new AppError(
@@ -108,7 +98,7 @@ async function getOnboarding(req, res, next) {
     const [tenantResult, userResult, servicesResult] = await Promise.all([
       supabase
         .from('tenants')
-        .select('business_name, message_template, messaging_enabled, onboarding_completed, onboarding_step, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key')
+        .select('business_name, message_template, messaging_enabled, onboarding_completed, onboarding_step')
         .eq('id', req.tenantId)
         .single(),
       supabase
@@ -128,16 +118,10 @@ async function getOnboarding(req, res, next) {
     const user = userResult.data;
     const serviceCount = servicesResult.count || 0;
 
-    const provider = tenant.whatsapp_provider || 'meta';
-    const whatsappConfigured = provider === 'wasender'
-      ? Boolean(String(tenant.wasender_api_key || '').trim())
-      : Boolean(String(tenant.whatsapp_phone_number_id || '').trim() && String(tenant.whatsapp_access_token || '').trim());
-
     const steps = {
       business_info:    { done: Boolean(String(tenant.business_name || '').trim()) },
       google_calendar:  { done: Boolean(user?.google_refresh_token) },
       calendar_format:  { done: (tenant.onboarding_step || 0) >= 3 },
-      whatsapp:         { done: whatsappConfigured },
       first_service:    { done: serviceCount > 0 },
       message_template: { done: Boolean(String(tenant.message_template || '').trim()) },
       enable_messaging: { done: tenant.messaging_enabled === true },
@@ -151,7 +135,7 @@ async function getOnboarding(req, res, next) {
         completed: tenant.onboarding_completed === true,
         currentStep: tenant.onboarding_step || 0,
         completedCount,
-        totalSteps: 7,
+        totalSteps: 6,
         steps,
       },
     });
