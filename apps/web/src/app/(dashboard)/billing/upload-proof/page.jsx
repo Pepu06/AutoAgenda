@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { api } from '../../../../lib/api';
@@ -21,7 +21,7 @@ function readFileAsDataUrl(file) {
   });
 }
 
-export default function UploadProofPage() {
+function UploadProofPageContent() {
   const searchParams = useSearchParams();
   const [plan, setPlan] = useState(() => normalizePlan(searchParams.get('plan')));
   const [file, setFile] = useState(null);
@@ -142,5 +142,13 @@ export default function UploadProofPage() {
         )}
       </form>
     </div>
+  );
+}
+
+export default function UploadProofPage() {
+  return (
+    <Suspense fallback={<div className={s.page} />}>
+      <UploadProofPageContent />
+    </Suspense>
   );
 }
