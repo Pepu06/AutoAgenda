@@ -55,7 +55,6 @@ enum SubscriptionStatus {
 model Tenant {
   id                     String   @id @default(cuid())
   name                   String
-  slug                   String   @unique
   plan                   String   @default("free")
   whatsappProvider       String?  @default("meta")
   whatsappPhoneNumberId  String?

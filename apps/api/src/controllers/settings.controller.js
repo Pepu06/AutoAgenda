@@ -13,7 +13,7 @@ const ALLOWED_FIELDS = [
   'confirm_reply_message', 'cancel_reply_message',
 ];
 
-const SELECT_COLS = ['id', 'name', 'slug', ...ALLOWED_FIELDS].join(', ');
+const SELECT_COLS = ['id', 'name', ...ALLOWED_FIELDS].join(', ');
 
 async function getSettings(req, res, next) {
   try {

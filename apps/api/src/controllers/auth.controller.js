@@ -6,6 +6,7 @@ const env = require('../config/env');
 const { AppError } = require('../errors');
 const { exchangeCodeForTokens, getUserInfo } = require('../services/google');
 const { sendEmail } = require('../services/email');
+const logger = require('../config/logger');
 
 function makeJwt(user, extra = {}) {
   return jwt.sign(
@@ -33,17 +34,16 @@ async function sendVerificationEmail(userId, email) {
     subject: 'Verificá tu email — AutoAgenda',
     text: `Bienvenido a AutoAgenda. Para verificar tu email hacé clic en el siguiente enlace (válido por 24 horas):\n${verifyUrl}`,
     html: `<p>Bienvenido a AutoAgenda. Para verificar tu email hacé clic en el siguiente enlace (válido por 24 horas):</p><p><a href="${verifyUrl}">Verificar email</a></p>`,
-  }).catch(() => {}); // Non-blocking
+  }).catch(err => {
+    logger.error({ err, email, userId }, '[Email] Failed to send verification email');
+  }); // Non-blocking
 }
 
 async function register(req, res, next) {
   try {
-    const { tenantName, slug, email, password } = req.body;
-    if (!tenantName || !slug || !email || !password)
-      throw new AppError('tenantName, slug, email and password are required', 400);
-
-    const { data: existingTenant } = await supabase.from('tenants').select('id').eq('slug', slug).maybeSingle();
-    if (existingTenant) throw new AppError('Slug already taken', 409);
+    const { tenantName, email, password } = req.body;
+    if (!tenantName || !email || !password)
+      throw new AppError('tenantName, email and password are required', 400);
 
     const { data: existingUser } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
     if (existingUser) throw new AppError('Email already registered', 409);
@@ -51,7 +51,7 @@ async function register(req, res, next) {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const { data: tenant, error: tenantErr } = await supabase
-      .from('tenants').insert({ name: tenantName, slug }).select().single();
+      .from('tenants').insert({ name: tenantName }).select().single();
     if (tenantErr) throw tenantErr;
 
     const { data: user, error: userErr } = await supabase
@@ -65,7 +65,9 @@ async function register(req, res, next) {
     if (userErr) throw userErr;
 
     // Send verification email (non-blocking)
-    sendVerificationEmail(user.id, email).catch(() => {});
+    sendVerificationEmail(user.id, email).catch(err => {
+      logger.error({ err, email, userId: user.id }, '[Register] Failed to send verification email');
+    });
 
     const token = makeJwt(user, { tenantName, email });
     return res.status(201).json({ success: true, data: { token, tenantId: tenant.id, userId: user.id, role: user.role } });
@@ -115,11 +117,8 @@ async function googleAuth(req, res, next) {
     }
 
     // New user — auto-create tenant
-    const baseSlug = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '-');
-    const slug = `${baseSlug}-${Date.now().toString(36)}`;
-
     const { data: tenant, error: tenantErr } = await supabase
-      .from('tenants').insert({ name: name || email, slug }).select().single();
+      .from('tenants').insert({ name: name || email }).select().single();
     if (tenantErr) throw tenantErr;
 
     const { data: newUser, error: userErr } = await supabase
@@ -164,7 +163,9 @@ async function forgotPassword(req, res, next) {
         subject: 'Recuperar contraseña — AutoAgenda',
         text: `Recibiste este mensaje porque solicitaste restablecer tu contraseña.\n\nHacé clic en el siguiente enlace (válido por 1 hora):\n${resetUrl}\n\nSi no lo solicitaste, ignorá este email.`,
         html: `<p>Recibiste este mensaje porque solicitaste restablecer tu contraseña.</p><p><a href="${resetUrl}">Restablecer contraseña</a> (válido por 1 hora)</p><p>Si no lo solicitaste, ignorá este email.</p>`,
-      }).catch(() => {}); // Fire-and-forget
+      }).catch(err => {
+        logger.error({ err, email }, '[ForgotPassword] Failed to send reset email');
+      }); // Fire-and-forget
     }
 
     return res.json({ success: true, message: 'Si el email existe, te enviamos las instrucciones.' });

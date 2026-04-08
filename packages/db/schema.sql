@@ -12,7 +12,6 @@ CREATE TYPE message_status     AS ENUM ('sent', 'delivered', 'read', 'failed');
 CREATE TABLE tenants (
   id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name                      TEXT NOT NULL,
-  slug                      TEXT UNIQUE NOT NULL,
   plan                      TEXT NOT NULL DEFAULT 'free',
   whatsapp_phone_number_id  TEXT,
   whatsapp_access_token     TEXT,

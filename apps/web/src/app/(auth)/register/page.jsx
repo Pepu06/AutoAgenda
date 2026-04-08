@@ -20,7 +20,7 @@ function GoogleIcon() {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ tenantName: '', slug: '', email: '', password: '' });
+  const [form, setForm] = useState({ tenantName: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -125,17 +125,6 @@ export default function RegisterPage() {
                   placeholder="Mi Clínica"
                   value={form.tenantName}
                   onChange={(e) => setForm({ ...form, tenantName: e.target.value })}
-                  className={styles.input}
-                  required
-                />
-              </div>
-              <div className={styles.inputGroup}>
-                <label className={styles.inputLabel}>Slug (identificador único)</label>
-                <input
-                  type="text"
-                  placeholder="mi-clinica"
-                  value={form.slug}
-                  onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/\s/g, '-') })}
                   className={styles.input}
                   required
                 />
