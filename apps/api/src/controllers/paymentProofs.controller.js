@@ -152,14 +152,7 @@ async function approvePaymentProof(req, res, next) {
       throw new ValidationError('El comprobante no tiene un plan válido para aprobar');
     }
 
-    // Mapear nombres del frontend a enums de la DB
-    const planMapping = {
-      inicial: 'basic',
-      profesional: 'pro',
-      custom: 'pro', // custom también usa pro
-    };
-
-    const dbPlan = planMapping[proof.plan];
+    const dbPlan = proof.plan;
 
     const now = new Date();
     const currentPeriodEnd = new Date(now);

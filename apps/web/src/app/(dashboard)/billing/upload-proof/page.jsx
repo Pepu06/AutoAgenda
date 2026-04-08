@@ -1,9 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { api } from '../../../../lib/api';
 import s from './upload-proof.module.css';
+
+const VALID_PLANS = ['inicial', 'profesional', 'custom'];
+
+function normalizePlan(value) {
+  return VALID_PLANS.includes(value) ? value : 'inicial';
+}
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -15,12 +22,17 @@ function readFileAsDataUrl(file) {
 }
 
 export default function UploadProofPage() {
-  const [plan, setPlan] = useState('inicial');
+  const searchParams = useSearchParams();
+  const [plan, setPlan] = useState(() => normalizePlan(searchParams.get('plan')));
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [ok, setOk] = useState(false);
+
+  useEffect(() => {
+    setPlan(normalizePlan(searchParams.get('plan')));
+  }, [searchParams]);
 
   async function handleFileChange(e) {
     setError('');
@@ -81,8 +93,9 @@ export default function UploadProofPage() {
         <div className={s.row}>
           <label className={s.label}>Plan</label>
           <select className={s.input} value={plan} onChange={e => setPlan(e.target.value)}>
-            <option value="basic">Inicial</option>
-            <option value="pro">Profesional</option>
+            <option value="inicial">Plan de 100 recordatorios</option>
+            <option value="profesional">Plan de 200 recordatorios</option>
+            <option value="custom">Plan de 300 recordatorios</option>
           </select>
         </div>
 

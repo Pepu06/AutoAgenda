@@ -2,7 +2,6 @@ const { supabase } = require('@autoagenda/db');
 const { sendTemplate } = require('../services/whatsapp');
 const logger = require('../config/logger');
 const { formatTemplateHour } = require('../utils/datetime');
-const { trackMessageSent } = require('./usageTracking');
 
 function hasReminderConfig(tenant) {
   const businessName = String(tenant?.business_name || '').trim();
@@ -86,8 +85,6 @@ async function sendFollowUp({ appointmentId }) {
     logger.error({ appointmentId, updateError }, 'Failed to mark appointment as pending after follow-up');
     throw updateError;
   }
-
-  await trackMessageSent(appointment.tenant_id, 'follow_up');
 
   const { error: logError } = await supabase.from('message_logs').insert({
     tenant_id:      appointment.tenant_id,

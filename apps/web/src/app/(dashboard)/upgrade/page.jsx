@@ -115,7 +115,7 @@ function PlanCard({ plan, featured }) {
             </div>
           </div>
           <Link
-            href="/billing/upload-proof"
+            href={`/billing/upload-proof?plan=${encodeURIComponent(plan.id)}`}
             className={s.btnPrimary}
             style={{ marginTop: 12, textDecoration: 'none' }}
           >
