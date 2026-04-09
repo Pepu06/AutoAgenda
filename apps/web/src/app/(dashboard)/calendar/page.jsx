@@ -102,13 +102,13 @@ export default function CalendarPage() {
 
   const fetchCalendarsAndDefault = useCallback(async () => {
     try {
-      const [cals, def] = await Promise.all([
-        api.get('/autoagenda/google-calendars'),
-        api.get('/calendar/default'),
-      ]);
+      const cals = await api.get('/autoagenda/google-calendars');
       setCalendars(cals.data || []);
-      setDefaultCalendarId(def.data?.calendarId || 'primary');
     } catch { /* GCal not connected yet */ }
+    try {
+      const def = await api.get('/calendar/default');
+      setDefaultCalendarId(def.data?.calendarId || 'primary');
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -136,7 +136,7 @@ export default function CalendarPage() {
 
   const connectCalendar = useGoogleLogin({
     flow: 'auth-code',
-    scope: 'https://www.googleapis.com/auth/calendar.events',
+    scope: 'https://www.googleapis.com/auth/calendar',
     access_type: 'offline',
     prompt: 'consent',
     onSuccess: async ({ code }) => {
@@ -299,9 +299,12 @@ export default function CalendarPage() {
                 onChange={e => saveDefaultCalendar(e.target.value)}
                 disabled={savingDefault}
                 style={{
-                  padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                  padding: '7px 32px 7px 12px', borderRadius: 8, border: '1px solid var(--border)',
                   background: 'var(--surface)', color: 'var(--text)', fontSize: 13.5,
                   fontFamily: 'inherit', cursor: 'pointer',
+                  appearance: 'none', WebkitAppearance: 'none',
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238b8fa8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
                 }}
               >
                 {calendars.map(c => (
@@ -333,26 +336,20 @@ export default function CalendarPage() {
           <div className={styles.gridPanel}>
             <div className={styles.monthNav}>
               <div className={styles.monthSelectors}>
-                <div className={styles.selectWrap}>
-                  <select
-                    className={styles.monthSelect}
-                    value={month}
-                    onChange={e => setCurrentDate(d => { const n = new Date(d); n.setMonth(Number(e.target.value)); return n; })}
-                  >
-                    {MONTH_NAMES.map((name, i) => <option key={i} value={i}>{name}</option>)}
-                  </select>
-                  <span className={styles.selectChevron}>▾</span>
-                </div>
-                <div className={styles.selectWrap}>
-                  <select
-                    className={styles.yearSelect}
-                    value={year}
-                    onChange={e => setCurrentDate(d => { const n = new Date(d); n.setFullYear(Number(e.target.value)); return n; })}
-                  >
-                    {years.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                  <span className={styles.selectChevron}>▾</span>
-                </div>
+                <select
+                  className={styles.monthSelect}
+                  value={month}
+                  onChange={e => setCurrentDate(d => { const n = new Date(d); n.setMonth(Number(e.target.value)); return n; })}
+                >
+                  {MONTH_NAMES.map((name, i) => <option key={i} value={i}>{name}</option>)}
+                </select>
+                <select
+                  className={styles.yearSelect}
+                  value={year}
+                  onChange={e => setCurrentDate(d => { const n = new Date(d); n.setFullYear(Number(e.target.value)); return n; })}
+                >
+                  {years.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
               </div>
               <div className={styles.navBtns}>
                 <button className={styles.navBtn} onClick={prevMonth}>←</button>
@@ -454,7 +451,7 @@ export default function CalendarPage() {
                   required
                   value={createForm.contactId}
                   onChange={e => setCreateForm(f => ({ ...f, contactId: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14 }}
+                  style={{ width: '100%', padding: '8px 32px 8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14, appearance: 'none', WebkitAppearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238b8fa8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}
                 >
                   <option value="">Seleccionar contacto...</option>
                   {contacts.map(c => <option key={c.id} value={c.id}>{c.name} — {c.phone}</option>)}
@@ -466,7 +463,7 @@ export default function CalendarPage() {
                   required
                   value={createForm.serviceId}
                   onChange={e => setCreateForm(f => ({ ...f, serviceId: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14 }}
+                  style={{ width: '100%', padding: '8px 32px 8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14, appearance: 'none', WebkitAppearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238b8fa8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}
                 >
                   <option value="">Seleccionar servicio...</option>
                   {services.map(s => <option key={s.id} value={s.id}>{s.name} ({s.durationMinutes} min)</option>)}

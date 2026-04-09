@@ -408,9 +408,12 @@ const inputStyle = {
 };
 
 const selectStyle = {
-  padding: '7px 10px', background: 'var(--surface-2)',
+  padding: '7px 32px 7px 10px', background: 'var(--surface-2)',
   border: '1px solid var(--border)', borderRadius: 8,
   fontSize: 13, color: 'var(--text)', cursor: 'pointer', outline: 'none',
+  appearance: 'none', WebkitAppearance: 'none',
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238b8fa8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
 };
 
 const smallBtn = {

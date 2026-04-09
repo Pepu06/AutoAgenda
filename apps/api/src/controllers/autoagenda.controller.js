@@ -382,9 +382,14 @@ async function getGoogleCalendars(req, res, next) {
     } catch {
       // Token likely expired — try refresh
       if (!user.google_refresh_token) return res.json({ success: true, data: [] });
-      token = await refreshAccessToken(user.google_refresh_token);
-      await supabase.from('users').update({ google_access_token: token }).eq('id', req.userId);
-      calendars = await listCalendars(token);
+      try {
+        token = await refreshAccessToken(user.google_refresh_token);
+        await supabase.from('users').update({ google_access_token: token }).eq('id', req.userId);
+        calendars = await listCalendars(token);
+      } catch {
+        // Refresh failed — token fully expired, user needs to reconnect
+        return res.json({ success: true, data: [] });
+      }
     }
 
     return res.json({ success: true, data: calendars });
