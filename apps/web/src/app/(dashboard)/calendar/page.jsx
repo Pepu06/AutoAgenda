@@ -529,6 +529,19 @@ function EventPopup({ event, reminding, onRemind, onClose }) {
               <span className={styles.popupValue}>{event.phone}</span>
             </div>
           )}
+          {(() => {
+            const notes = (event.description || '')
+              .split('\n')
+              .filter(l => !/^\[.*\]$/.test(l.trim()))
+              .join('\n')
+              .trim();
+            return notes ? (
+              <div className={styles.popupField} style={{ alignItems: 'flex-start' }}>
+                <span className={styles.popupLabel}>Notas</span>
+                <span className={styles.popupValue} style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{notes}</span>
+              </div>
+            ) : null;
+          })()}
           <div className={styles.popupField}>
             <span className={styles.popupLabel}>Estado</span>
             <span

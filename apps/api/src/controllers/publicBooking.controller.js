@@ -275,9 +275,19 @@ async function createBooking(req, res, next) {
           const calendarId = type.google_calendar_id || 'primary';
           const endTime = new Date(slotDate.getTime() + type.duration_minutes * 60 * 1000);
           console.log('[publicBooking] Creating calendar event in:', calendarId, 'start:', slotISO);
+          const descParts = [`[${cleanPhone}]`];
+          if (email?.trim()) descParts.push(`Email: ${email.trim()}`);
+          if (notes?.trim()) descParts.push(notes.trim());
+          if (type.extra_questions?.length && Object.keys(answers).length) {
+            for (const q of type.extra_questions) {
+              const answer = answers[q.id];
+              if (answer !== undefined) descParts.push(`${q.label}: ${answer}`);
+            }
+          }
+
           await createCalendarEventInCalendar(accessToken, calendarId, {
-            summary:       `${type.title} - ${name.trim()}`,
-            description:   appointmentNotes || '',
+            summary:       `${name.trim()} - ${type.title}`,
+            description:   descParts.join('\n'),
             startDateTime: slotISO,
             endDateTime:   endTime.toISOString(),
           });
