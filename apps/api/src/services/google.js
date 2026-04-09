@@ -212,7 +212,7 @@ async function listCalendars(accessToken) {
   const res = await fetch(`${CAL_BASE}/users/me/calendarList`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`listCalendars failed: ${res.status}`);
   const data = await res.json();
   return (data.items || []).map(c => ({ id: c.id, summary: c.summary, primary: !!c.primary }));
 }

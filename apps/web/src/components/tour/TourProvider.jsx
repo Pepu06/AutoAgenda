@@ -45,7 +45,7 @@ function computePopoverStyle(rect, position, popoverWidth = 320, popoverHeight =
     if (left < GAP) { left = rect.right + GAP; placement = 'right'; }
   }
 
-  // Hard clamp — always keep popover fully on screen regardless of flip outcome
+  // Hard clamp — always keep popover fully on screen
   top  = Math.max(GAP, Math.min(top,  winH - popoverHeight - GAP));
   left = Math.max(GAP, Math.min(left, winW - popoverWidth  - GAP));
 
@@ -59,17 +59,20 @@ export function TourProvider({ children }) {
   const router   = useRouter();
   const pathname = usePathname();
 
-  const [isActive,     setIsActive]     = useState(false);
-  const [stepIndex,    setStepIndex]    = useState(0);
-  const [targetRect,   setTargetRect]   = useState(null);
-  const [popoverPos,   setPopoverPos]   = useState(null);
-  const [popoverReady, setPopoverReady] = useState(false);
+  const [isActive,          setIsActive]          = useState(false);
+  const [stepIndex,         setStepIndex]         = useState(0);
+  const [targetRect,        setTargetRect]        = useState(null);
+  const [popoverPos,        setPopoverPos]        = useState(null);
+  const [popoverReady,      setPopoverReady]      = useState(false);
+  // true when the element wasn't found and we fall back to centered display
+  const [fallbackCentered,  setFallbackCentered]  = useState(false);
+
   const prevHighlightRef = useRef(null);
   const popoverRef       = useRef(null);
 
-  // Refs so pathname effect always reads current values (avoid stale closure)
-  const isActiveRef   = useRef(false);
-  const stepIndexRef  = useRef(0);
+  // Refs so the pathname effect always reads the latest values (no stale closure)
+  const isActiveRef  = useRef(false);
+  const stepIndexRef = useRef(0);
   isActiveRef.current  = isActive;
   stepIndexRef.current = stepIndex;
 
@@ -94,7 +97,7 @@ export function TourProvider({ children }) {
     }
   }
 
-  // ── Show step: navigate + wait for element ──────────
+  // ── Show step: wait for element then position popover ──
   const showStep = useCallback((idx) => {
     const s = STEPS[idx];
     if (!s) return;
@@ -102,25 +105,25 @@ export function TourProvider({ children }) {
     setStepIndex(idx);
     setPopoverReady(false);
     setTargetRect(null);
+    setPopoverPos(null);
+    setFallbackCentered(false);
     persist(idx);
     removeHighlight();
 
-    // If centered (no selector), show immediately
+    // No selector → show centered immediately
     if (!s.selector) {
-      setPopoverPos(null);
       setPopoverReady(true);
       return;
     }
 
-    // Otherwise wait for element to appear (after potential route change)
+    // Poll for the element (up to 4 s, covers page loading spinners)
     let attempts = 0;
-    const MAX = 40; // 4 seconds
+    const MAX = 40;
 
     const tick = () => {
       const el = document.querySelector(s.selector);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Small delay after scroll
         setTimeout(() => {
           const r = el.getBoundingClientRect();
           el.classList.add('tour-highlight');
@@ -132,8 +135,8 @@ export function TourProvider({ children }) {
         attempts++;
         setTimeout(tick, 100);
       } else {
-        // Element not found — just show centered
-        setPopoverPos(null);
+        // Element not found — show popover centered (no highlight)
+        setFallbackCentered(true);
         setPopoverReady(true);
       }
     };
@@ -141,7 +144,7 @@ export function TourProvider({ children }) {
   }, []);
 
   // ── Route change: re-attach highlight after navigation ──
-  // Uses refs so we always read the current stepIndex/isActive, not stale closure values
+  // Uses refs to avoid reading stale stepIndex / isActive values
   useEffect(() => {
     if (!isActiveRef.current) return;
     const idx = stepIndexRef.current;
@@ -169,7 +172,7 @@ export function TourProvider({ children }) {
     }
   }, [pathname, router, showStep]);
 
-  // ── Auto-start / resume tour on mount ──────────────
+  // ── Auto-start / resume on mount ───────────────────
   useEffect(() => {
     const dismissed = localStorage.getItem(DISMISSED_KEY) === 'true';
     const wasActive = localStorage.getItem(ACTIVE_KEY) === 'true';
@@ -182,10 +185,9 @@ export function TourProvider({ children }) {
       return;
     }
 
-    // Already dismissed — don't bother the user again
     if (dismissed) return;
 
-    // Check backend: auto-start if onboarding not completed
+    // First visit: check backend
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!token) return;
 
@@ -203,7 +205,7 @@ export function TourProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Re-compute popover position on resize ──────────
+  // ── Re-compute popover position after mount / resize ──
   useEffect(() => {
     if (!popoverReady || !targetRect) return;
     const ph = popoverRef.current?.offsetHeight || 220;
@@ -215,10 +217,7 @@ export function TourProvider({ children }) {
   // ── Navigation ──────────────────────────────────────
   function next() {
     const nextIdx = stepIndex + 1;
-    if (nextIdx >= STEPS.length) {
-      completeTour();
-      return;
-    }
+    if (nextIdx >= STEPS.length) { completeTour(); return; }
     const nextStep = STEPS[nextIdx];
     if (nextStep.route && pathname !== nextStep.route) {
       removeHighlight();
@@ -246,10 +245,6 @@ export function TourProvider({ children }) {
     }
   }
 
-  function skipStep() {
-    next(); // same as next for now
-  }
-
   function dismissTour() {
     removeHighlight();
     clearPersist();
@@ -263,7 +258,6 @@ export function TourProvider({ children }) {
     clearPersist();
     setIsActive(false);
     setPopoverReady(false);
-    // Mark onboarding complete in backend (best-effort)
     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/settings/onboarding`, {
       method: 'PUT',
       headers: {
@@ -279,31 +273,32 @@ export function TourProvider({ children }) {
     startTour(0);
   }
 
-  const totalVisible = STEPS.filter(s => s.id !== 'welcome' && s.id !== 'done').length;
-  const currentVisible = Math.max(0, stepIndex - 1); // offset by welcome step
+  const totalVisible   = STEPS.filter(s => s.id !== 'welcome' && s.id !== 'done').length;
+  const currentVisible = Math.max(0, stepIndex - 1);
+
+  // A step is "anchored" when it has a selector AND we found the element (not fallback)
+  const isAnchored = step?.selector && !fallbackCentered;
 
   return (
     <TourContext.Provider value={{ isActive, startTour, restartTour, dismissTour, stepIndex }}>
       {children}
 
-      {/* ── Tour overlay ── */}
       {isActive && popoverReady && step && (
         <>
-          {/* Dark backdrop for centered steps */}
-          {!step.selector && <div className={styles.backdrop} onClick={dismissTour} />}
+          {/* Backdrop for centered/fallback steps — only dismissible when step has no selector (welcome/done) */}
+          {!isAnchored && <div className={styles.backdrop} onClick={step?.selector ? undefined : dismissTour} />}
 
-          {/* Popover */}
           <div
             ref={popoverRef}
-            className={`${styles.popover} ${!step.selector ? styles.popoverCentered : ''}`}
+            className={`${styles.popover} ${!isAnchored ? styles.popoverCentered : ''}`}
             style={
-              step.selector
-                ? { ...(popoverPos ? popoverPos.style : { visibility: 'hidden' }) }
+              isAnchored
+                ? (popoverPos ? popoverPos.style : { visibility: 'hidden' })
                 : undefined
             }
           >
-            {/* Arrow */}
-            {step.selector && popoverPos && (
+            {/* Arrow — only when anchored and positioned */}
+            {isAnchored && popoverPos && (
               <div className={`${styles.arrow} ${
                 popoverPos.placement === 'bottom' ? styles.arrowBottom :
                 popoverPos.placement === 'top'    ? styles.arrowTop    :
@@ -320,13 +315,11 @@ export function TourProvider({ children }) {
 
             <div className={styles.footer}>
               <span className={styles.progress}>
-                {Math.round(((stepIndex) / (STEPS.length - 1)) * 100)}%
+                {Math.round((stepIndex / (STEPS.length - 1)) * 100)}%
               </span>
 
               {step.canSkip !== false && stepIndex > 0 && (
-                <button className={styles.btnSkip} onClick={dismissTour}>
-                  Saltar tour
-                </button>
+                <button className={styles.btnSkip} onClick={dismissTour}>Saltar tour</button>
               )}
 
               {stepIndex > 0 && step.id !== 'done' && (

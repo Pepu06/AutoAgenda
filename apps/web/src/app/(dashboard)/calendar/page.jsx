@@ -254,7 +254,7 @@ export default function CalendarPage() {
             {connected ? 'Vista mensual de tus citas' : 'Conectá tu Google Calendar para sincronizar eventos'}
           </p>
         </div>
-        <div className={styles.headerActions}>
+        <div className={styles.headerActions} data-tour="gcal-connect">
           {connected ? (
             <>
               <button className={styles.btnSync} onClick={openCreate}>+ Nueva cita</button>
@@ -267,7 +267,6 @@ export default function CalendarPage() {
             <button
               className={styles.btnConnect}
               onClick={() => connectCalendar()}
-              data-tour="gcal-connect"
             >
               <GoogleCalIcon /> Conectar Google Calendar
             </button>
@@ -275,8 +274,8 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Default calendar selector — shown when connected and calendars loaded */}
-      {connected && calendars.length > 0 && (
+      {/* Default calendar selector — always visible when connected so the tour can highlight it */}
+      {connected && (
         <div
           data-tour="gcal-default"
           style={{
@@ -293,25 +292,27 @@ export default function CalendarPage() {
               Las citas nuevas se crean en este calendario
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <select
-              value={defaultCalendarId}
-              onChange={e => saveDefaultCalendar(e.target.value)}
-              disabled={savingDefault}
-              style={{
-                padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)',
-                background: 'var(--surface)', color: 'var(--text)', fontSize: 13.5,
-                fontFamily: 'inherit', cursor: 'pointer',
-              }}
-            >
-              {calendars.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.summary}{c.primary ? ' (principal)' : ''}
-                </option>
-              ))}
-            </select>
-            {savingDefault && <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Guardando...</span>}
-          </div>
+          {calendars.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <select
+                value={defaultCalendarId}
+                onChange={e => saveDefaultCalendar(e.target.value)}
+                disabled={savingDefault}
+                style={{
+                  padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                  background: 'var(--surface)', color: 'var(--text)', fontSize: 13.5,
+                  fontFamily: 'inherit', cursor: 'pointer',
+                }}
+              >
+                {calendars.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.summary}{c.primary ? ' (principal)' : ''}
+                  </option>
+                ))}
+              </select>
+              {savingDefault && <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Guardando...</span>}
+            </div>
+          )}
         </div>
       )}
 

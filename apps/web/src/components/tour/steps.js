@@ -93,8 +93,8 @@ const STEPS = [
     route: '/calendar',
     selector: '[data-tour="gcal-connect"]',
     position: 'bottom',
-    title: 'Conectar Google Calendar',
-    text: 'Conectá tu cuenta de Google para sincronizar citas automáticamente. Necesitás hacer esto una sola vez.',
+    title: 'Google Calendar',
+    text: 'Si todavía no conectaste tu cuenta de Google, hacé click en "Conectar Google Calendar". Si ya está conectado (ves los botones de sincronizar y desconectar), podés pasar al siguiente paso.',
     canSkip: true,
   },
   {
@@ -103,7 +103,7 @@ const STEPS = [
     selector: '[data-tour="gcal-default"]',
     position: 'bottom',
     title: 'Calendario predeterminado',
-    text: 'Si tenés varios calendarios en Google, elegí en cuál querés que se creen las citas de AutoAgenda.',
+    text: 'Una vez conectado, aparece este selector. Elegí en cuál de tus calendarios de Google querés que se creen las citas automáticamente. Si solo tenés uno, ya está configurado.',
     canSkip: true,
   },
 
