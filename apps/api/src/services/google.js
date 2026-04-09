@@ -193,6 +193,45 @@ async function createCalendarEvent(accessToken, { summary, description, startDat
   return res.json();
 }
 
+async function listCalendars(accessToken) {
+  const res = await fetch(`${CAL_BASE}/users/me/calendarList`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.items || []).map(c => ({ id: c.id, summary: c.summary, primary: !!c.primary }));
+}
+
+// Same as createCalendarEvent but allows specifying a calendarId (defaults to 'primary')
+async function createCalendarEventInCalendar(accessToken, calendarId, eventData) {
+  const calId = calendarId || 'primary';
+  const { summary, description, startDateTime, endDateTime, attendees = [], location } = eventData;
+  const body = {
+    summary,
+    description,
+    start: { dateTime: startDateTime },
+    end:   { dateTime: endDateTime },
+  };
+  if (location) body.location = location;
+  if (attendees.length) body.attendees = attendees.map(email => ({ email }));
+
+  const params = new URLSearchParams();
+  if (attendees.length) params.set('sendUpdates', 'all');
+
+  const url = `${CAL_BASE}/calendars/${encodeURIComponent(calId)}/events${params.toString() ? `?${params}` : ''}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(`Google Calendar POST failed (${res.status}): ${data?.error?.message || 'unknown error'}`);
+  }
+  return res.json();
+}
+
 module.exports = {
   exchangeCodeForTokens,
   refreshAccessToken,
@@ -203,4 +242,6 @@ module.exports = {
   updateEventColor,
   updateEventTitleAndColor,
   createCalendarEvent,
+  listCalendars,
+  createCalendarEventInCalendar,
 };

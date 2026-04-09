@@ -21,11 +21,8 @@ npm run format
 cd apps/api && npm run dev
 cd apps/web && npm run dev
 
-# Database commands (from packages/db or root)
-cd packages/db && npm run db:generate   # regenerate Prisma client
-cd packages/db && npm run db:migrate    # run migrations
-cd packages/db && npm run db:push       # push schema without migration
-cd packages/db && npm run db:studio     # open Prisma Studio
+# Database migrations: apply SQL files manually in Supabase SQL Editor
+# See packages/db/migrations/ for migration files
 ```
 
 There are no tests configured yet.
@@ -38,7 +35,7 @@ There are no tests configured yet.
 
 | Package | Path | Role |
 |---|---|---|
-| `@recordai/db` | `packages/db/` | Prisma client singleton + schema |
+| `@autoagenda/db` | `packages/db/` | Supabase client singleton + `convertKeys` helper |
 | `@recordai/shared` | `packages/shared/` | Shared enums/constants (AppointmentStatus, JobName, etc.) |
 | API | `apps/api/` | Express REST API + BullMQ workers |
 | Web | `apps/web/` | Next.js 15 dashboard |
@@ -51,7 +48,7 @@ The API is structured around multi-tenancy: every DB query scopes by `tenantId` 
 1. `src/index.js` — starts Express, boots queue workers, listens on PORT
 2. `src/app.js` — registers middleware (helmet, cors, json) and routes
 3. `src/middleware/auth.js` — validates Bearer JWT on protected routes
-4. `src/controllers/*.controller.js` — business logic, calls Prisma
+4. `src/controllers/*.controller.js` — business logic, calls Supabase
 5. `src/middleware/errorHandler.js` — catches `AppError` subclasses, returns JSON
 
 **Error handling:** Throw from `src/errors/index.js` (`NotFoundError`, `ValidationError`, etc.) and the global error handler formats the response. Never throw plain `Error` objects in controllers.
@@ -86,7 +83,7 @@ See `.env.example`. The API reads from the root `.env` and validates with Zod on
 
 | Variable | Used by |
 |---|---|
-| `DATABASE_URL` | Prisma (Supabase PostgreSQL) |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` | Supabase client (packages/db) |
 | `JWT_SECRET` | API auth middleware |
 | `REDIS_URL` | BullMQ (Upstash Redis) |
 | `WHATSAPP_VERIFY_TOKEN` | Webhook verification handshake |

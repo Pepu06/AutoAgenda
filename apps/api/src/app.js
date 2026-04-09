@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const Sentry = require('@sentry/node');
 const errorHandler = require('./middleware/errorHandler');
 const env = require('./config/env');
-const { authLimiter } = require('./middleware/rateLimiter');
+const { authLimiter, webhookLimiter, confirmationLimiter } = require('./middleware/rateLimiter');
 
 const authRoutes = require('./routes/auth.routes');
 const contactsRoutes = require('./routes/contacts.routes');
@@ -17,6 +17,8 @@ const settingsRoutes = require('./routes/settings.routes');
 const subscriptionRoutes = require('./routes/subscription.routes');
 const paymentProofsRoutes = require('./routes/paymentProofs.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
+const autoagendaRoutes = require('./routes/autoagenda.routes');
+const publicBookingRoutes = require('./routes/publicBooking.routes');
 
 const app = express();
 
@@ -51,8 +53,9 @@ app.get('/', (req, res) => {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-// Public confirmation pages (no auth)
-app.use('/', confirmationRoutes);
+// Public confirmation pages + public booking (no auth), rate limited
+app.use('/', confirmationLimiter, confirmationRoutes);
+app.use('/public', confirmationLimiter, publicBookingRoutes);
 
 app.use('/auth', authLimiter, authRoutes);
 app.use('/contacts', contactsRoutes);
@@ -64,6 +67,7 @@ app.use('/settings', settingsRoutes);
 app.use('/subscription', subscriptionRoutes);
 app.use('/', paymentProofsRoutes);
 app.use('/dashboard', dashboardRoutes);
+app.use('/autoagenda', autoagendaRoutes);
 
 // Sentry error handler must come before other error middleware
 if (env.SENTRY_DSN && env.NODE_ENV === 'production') {

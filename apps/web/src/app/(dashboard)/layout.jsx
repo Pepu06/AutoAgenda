@@ -65,6 +65,19 @@ const navItems = [
     ),
   },
   {
+    href: '/tu-autoagenda',
+    label: 'TuAutoAgenda',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+        <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
+      </svg>
+    ),
+  },
+  {
     href: '/billing',
     label: 'Facturación',
     icon: (
@@ -251,7 +264,7 @@ export default function DashboardLayout({ children }) {
               key={item.href}
               href={item.href}
               data-label={item.label}
-              className={`${styles.navItem} ${pathname === item.href ? styles.active : ''}`}
+              className={`${styles.navItem} ${pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)) ? styles.active : ''}`}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navLabel}>{item.label}</span>
