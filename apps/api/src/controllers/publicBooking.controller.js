@@ -41,12 +41,14 @@ async function getPublicProfile(req, res, next) {
           profileImage: tenant.autoagenda_profile_image,
         },
         types: (types || []).map(t => ({
-          id:              t.id,
-          title:           t.title,
-          description:     t.description,
-          durationMinutes: t.duration_minutes,
-          scheduleName:    t.schedule?.name,
-          price:           t.service?.price ?? null,
+          id:                   t.id,
+          title:                t.title,
+          description:          t.description,
+          durationMinutes:      t.duration_minutes,
+          scheduleName:         t.schedule?.name,
+          price:                t.service?.price ?? null,
+          requiresTransfer:     t.requires_transfer ?? false,
+          transferInstructions: t.transfer_instructions ?? null,
         })),
       },
     });
@@ -214,7 +216,7 @@ async function createBooking(req, res, next) {
 
     // Resolve owner userId
     const { data: owner } = await supabase
-      .from('users').select('id, google_access_token, google_refresh_token').eq('tenant_id', tenant.id).eq('role', 'owner').limit(1).maybeSingle();
+      .from('users').select('id, google_access_token, google_refresh_token, default_google_calendar_id').eq('tenant_id', tenant.id).eq('role', 'owner').limit(1).maybeSingle();
     if (!owner) throw new AppError('Error interno: no se encontró el profesional.', 500);
 
     // Find or create contact
@@ -246,12 +248,13 @@ async function createBooking(req, res, next) {
     const { data: appointment, error: aptErr } = await supabase
       .from('appointments')
       .insert({
-        tenant_id:    tenant.id,
-        contact_id:   contact.id,
-        service_id:   type.service_id,
-        user_id:      owner.id,
-        scheduled_at: slotISO,
-        notes:        appointmentNotes,
+        tenant_id:         tenant.id,
+        contact_id:        contact.id,
+        service_id:        type.service_id,
+        user_id:           owner.id,
+        scheduled_at:      slotISO,
+        notes:             appointmentNotes,
+        autoagenda_type_id: type.id,
       })
       .select('id, scheduled_at')
       .single();
@@ -272,7 +275,7 @@ async function createBooking(req, res, next) {
           }
         }
         if (accessToken) {
-          const calendarId = type.google_calendar_id || 'primary';
+          const calendarId = type.google_calendar_id || owner.default_google_calendar_id || 'primary';
           const endTime = new Date(slotDate.getTime() + type.duration_minutes * 60 * 1000);
           console.log('[publicBooking] Creating calendar event in:', calendarId, 'start:', slotISO);
           const descParts = [`[${cleanPhone}]`];
@@ -336,11 +339,13 @@ async function createBooking(req, res, next) {
     return res.status(201).json({
       success: true,
       data: {
-        appointmentId:   appointment.id,
-        scheduledAt:     appointment.scheduled_at,
-        title:           type.title,
-        durationMinutes: type.duration_minutes,
-        businessName:    tenant.autoagenda_title || tenant.name,
+        appointmentId:        appointment.id,
+        scheduledAt:          appointment.scheduled_at,
+        title:                type.title,
+        durationMinutes:      type.duration_minutes,
+        businessName:         tenant.autoagenda_title || tenant.name,
+        requiresTransfer:     type.requires_transfer ?? false,
+        transferInstructions: type.transfer_instructions ?? null,
       },
     });
   } catch (err) { return next(err); }

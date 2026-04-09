@@ -140,4 +140,22 @@ async function remove(req, res, next) {
   } catch (err) { return next(err); }
 }
 
-module.exports = { list, create, getOne, update, remove };
+async function updateTransfer(req, res, next) {
+  try {
+    const { data: existing } = await supabase
+      .from('appointments').select('id').eq('id', req.params.id).eq('tenant_id', req.tenantId).maybeSingle();
+    if (!existing) throw new NotFoundError('Cita no encontrada.');
+
+    const { transferConfirmed } = req.body;
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ transfer_confirmed: Boolean(transferConfirmed) })
+      .eq('id', req.params.id)
+      .select('id, transfer_confirmed')
+      .single();
+    if (error) throw error;
+    return res.json({ success: true, data: convertKeys(data) });
+  } catch (err) { return next(err); }
+}
+
+module.exports = { list, create, getOne, update, remove, updateTransfer };

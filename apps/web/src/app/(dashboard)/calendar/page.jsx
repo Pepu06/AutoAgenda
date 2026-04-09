@@ -80,6 +80,11 @@ export default function CalendarPage() {
   const [services, setServices]       = useState([]);
   const [locationMode, setLocationMode] = useState('fixed');
 
+  // Default calendar state
+  const [calendars, setCalendars]               = useState([]);
+  const [defaultCalendarId, setDefaultCalendarId] = useState('primary');
+  const [savingDefault, setSavingDefault]         = useState(false);
+
   const fetchStatus = useCallback(async () => {
     const res = await api.get('/calendar/status');
     setConnected(res.data.connected);
@@ -95,13 +100,39 @@ export default function CalendarPage() {
     finally { setSyncing(false); }
   }, []);
 
+  const fetchCalendarsAndDefault = useCallback(async () => {
+    try {
+      const [cals, def] = await Promise.all([
+        api.get('/autoagenda/google-calendars'),
+        api.get('/calendar/default'),
+      ]);
+      setCalendars(cals.data || []);
+      setDefaultCalendarId(def.data?.calendarId || 'primary');
+    } catch { /* GCal not connected yet */ }
+  }, []);
+
   useEffect(() => {
     fetchStatus().finally(() => setLoading(false));
   }, [fetchStatus]);
 
   useEffect(() => {
-    if (connected) fetchEvents();
-  }, [connected, fetchEvents]);
+    if (connected) {
+      fetchEvents();
+      fetchCalendarsAndDefault();
+    }
+  }, [connected, fetchEvents, fetchCalendarsAndDefault]);
+
+  async function saveDefaultCalendar(calId) {
+    setDefaultCalendarId(calId);
+    setSavingDefault(true);
+    try {
+      await api.put('/calendar/default', { calendarId: calId });
+    } catch (err) {
+      alert(err.message || 'Error al guardar el calendario predeterminado');
+    } finally {
+      setSavingDefault(false);
+    }
+  }
 
   const connectCalendar = useGoogleLogin({
     flow: 'auth-code',
@@ -142,7 +173,6 @@ export default function CalendarPage() {
     setCreating(true);
     setCreateError('');
     try {
-      // datetime-local has no timezone; append Argentina offset so server stores correct UTC
       const scheduledAt = createForm.scheduledAt ? createForm.scheduledAt + ':00-03:00' : createForm.scheduledAt;
       await api.post('/calendar/events', { ...createForm, scheduledAt });
       setShowCreate(false);
@@ -164,6 +194,21 @@ export default function CalendarPage() {
       alert(err.message || 'Error al enviar recordatorio');
     } finally {
       setReminding(null);
+    }
+  }
+
+  async function handleTransferChange(appointmentId, confirmed) {
+    try {
+      await api.patch(`/appointments/${appointmentId}/transfer`, { transferConfirmed: confirmed });
+      // Update local event state
+      setEvents(prev => prev.map(ev =>
+        ev.appointmentId === appointmentId ? { ...ev, transferConfirmed: confirmed } : ev
+      ));
+      setSelectedEvent(prev =>
+        prev?.appointmentId === appointmentId ? { ...prev, transferConfirmed: confirmed } : prev
+      );
+    } catch (err) {
+      alert(err.message || 'Error al actualizar transferencia');
     }
   }
 
@@ -219,12 +264,56 @@ export default function CalendarPage() {
               <button className={styles.btnDisconnect} onClick={handleDisconnect}>Desconectar</button>
             </>
           ) : (
-            <button className={styles.btnConnect} onClick={() => connectCalendar()}>
+            <button
+              className={styles.btnConnect}
+              onClick={() => connectCalendar()}
+              data-tour="gcal-connect"
+            >
               <GoogleCalIcon /> Conectar Google Calendar
             </button>
           )}
         </div>
       </div>
+
+      {/* Default calendar selector — shown when connected and calendars loaded */}
+      {connected && calendars.length > 0 && (
+        <div
+          data-tour="gcal-default"
+          style={{
+            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+            padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center',
+            gap: 12, flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>
+              Calendario predeterminado
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+              Las citas nuevas se crean en este calendario
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <select
+              value={defaultCalendarId}
+              onChange={e => saveDefaultCalendar(e.target.value)}
+              disabled={savingDefault}
+              style={{
+                padding: '7px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                background: 'var(--surface)', color: 'var(--text)', fontSize: 13.5,
+                fontFamily: 'inherit', cursor: 'pointer',
+              }}
+            >
+              {calendars.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.summary}{c.primary ? ' (principal)' : ''}
+                </option>
+              ))}
+            </select>
+            {savingDefault && <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Guardando...</span>}
+          </div>
+        </div>
+      )}
 
       {!connected ? (
         <div className={styles.connectCard}>
@@ -233,7 +322,7 @@ export default function CalendarPage() {
           <p className={styles.connectDesc}>
             Conectá Google Calendar para ver tus citas y enviar recordatorios automáticos por WhatsApp.
           </p>
-          <button className={styles.btnConnect} onClick={() => connectCalendar()}>
+          <button className={styles.btnConnect} onClick={() => connectCalendar()} data-tour="gcal-connect">
             Conectar Google Calendar
           </button>
         </div>
@@ -345,6 +434,7 @@ export default function CalendarPage() {
           reminding={reminding === selectedEvent.id}
           onRemind={() => handleRemind(selectedEvent.id)}
           onClose={() => setSelectedEvent(null)}
+          onTransferChange={handleTransferChange}
         />
       )}
 
@@ -496,7 +586,7 @@ function TimelineEvent({ event, reminding, onRemind, onSelect }) {
   );
 }
 
-function EventPopup({ event, reminding, onRemind, onClose }) {
+function EventPopup({ event, reminding, onRemind, onClose, onTransferChange }) {
   const time = event.isAllDay
     ? 'Todo el día'
     : formatTime(event.start);
@@ -505,6 +595,18 @@ function EventPopup({ event, reminding, onRemind, onClose }) {
     weekday: 'long', day: 'numeric', month: 'long',
   });
   const s = getStatusMeta(event.status);
+
+  const [markingTransfer, setMarkingTransfer] = useState(false);
+
+  async function handleMarkTransfer(confirmed) {
+    if (!event.appointmentId) return;
+    setMarkingTransfer(true);
+    try {
+      await onTransferChange(event.appointmentId, confirmed);
+    } finally {
+      setMarkingTransfer(false);
+    }
+  }
 
   return (
     <div className={styles.popupBackdrop} onClick={onClose}>
@@ -542,6 +644,61 @@ function EventPopup({ event, reminding, onRemind, onClose }) {
               </div>
             ) : null;
           })()}
+
+          {/* Transfer status — only shown for autoagenda bookings that require transfer */}
+          {event.requiresTransfer && (
+            <div className={styles.popupField} style={{ alignItems: 'center' }}>
+              <span className={styles.popupLabel}>Transferencia</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {event.transferConfirmed ? (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '4px 10px', borderRadius: 20, fontSize: 12.5, fontWeight: 600,
+                    background: '#dcfce7', color: '#166534',
+                  }}>
+                    ✅ Confirmada
+                  </span>
+                ) : (
+                  <>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '4px 10px', borderRadius: 20, fontSize: 12.5, fontWeight: 600,
+                      background: '#fef3c7', color: '#92400e',
+                    }}>
+                      ⚠️ Pendiente
+                    </span>
+                    {event.appointmentId && (
+                      <button
+                        disabled={markingTransfer}
+                        onClick={() => handleMarkTransfer(true)}
+                        style={{
+                          padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                          background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
+                          opacity: markingTransfer ? 0.6 : 1,
+                        }}
+                      >
+                        {markingTransfer ? '...' : 'Marcar como pagado'}
+                      </button>
+                    )}
+                  </>
+                )}
+                {event.transferConfirmed && event.appointmentId && (
+                  <button
+                    disabled={markingTransfer}
+                    onClick={() => handleMarkTransfer(false)}
+                    style={{
+                      padding: '4px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                      background: 'none', color: 'var(--text-3)', border: '1px solid var(--border)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Deshacer
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className={styles.popupField}>
             <span className={styles.popupLabel}>Estado</span>
             <span

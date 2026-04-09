@@ -21,6 +21,21 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+function TransferBanner({ instructions }) {
+  if (!instructions) return null;
+  return (
+    <div style={{
+      background: '#fffbeb', border: '1px solid #fbbf24', borderRadius: 12,
+      padding: '14px 16px', marginBottom: 16,
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 13.5, color: '#92400e', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span>⚠️</span> Esta cita requiere transferencia bancaria para confirmarse
+      </div>
+      <div style={{ fontSize: 13, color: '#78350f', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{instructions}</div>
+    </div>
+  );
+}
+
 export default function BookTypePage() {
   const { slug, typeId } = useParams();
 
@@ -104,20 +119,25 @@ export default function BookTypePage() {
 
   // Header strip
   const Header = () => (
-    <div style={{ background: '#fff', borderRadius: 16, padding: '16px 20px', marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 12 }}>
-      {profile?.profileImage && (
-        <img src={profile.profileImage} alt="perfil" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
-      )}
-      <div>
-        <div style={{ fontSize: 13, color: '#888' }}>{profile?.title}</div>
-        <div style={{ fontWeight: 700, fontSize: 15, color: '#111' }}>{typeData?.title}</div>
-        <div style={{ fontSize: 12.5, color: '#888', display: 'flex', gap: 10, alignItems: 'center' }}>
-          <span>{typeData?.durationMinutes} min</span>
-          {typeData?.price != null && typeData.price > 0 && (
-            <span style={{ fontWeight: 700, color: '#111', fontSize: 13 }}>${typeData.price.toLocaleString('es-AR')}</span>
-          )}
+    <div style={{ background: '#fff', borderRadius: 16, padding: '16px 20px', marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {profile?.profileImage && (
+          <img src={profile.profileImage} alt="perfil" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+        )}
+        <div>
+          <div style={{ fontSize: 13, color: '#888' }}>{profile?.title}</div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#111' }}>{typeData?.title}</div>
+          <div style={{ fontSize: 12.5, color: '#888', display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span>{typeData?.durationMinutes} min</span>
+            {typeData?.price != null && typeData.price > 0 && (
+              <span style={{ fontWeight: 700, color: '#111', fontSize: 13 }}>${typeData.price.toLocaleString('es-AR')}</span>
+            )}
+          </div>
         </div>
       </div>
+      {typeData?.description && (
+        <p style={{ margin: '10px 0 0', fontSize: 13.5, color: '#555', lineHeight: 1.5 }}>{typeData.description}</p>
+      )}
     </div>
   );
 
@@ -137,6 +157,14 @@ export default function BookTypePage() {
             <div><strong>Fecha y hora:</strong> {fmtDate(confirmation.scheduledAt)}, {fmtTime(confirmation.scheduledAt)}</div>
             <div><strong>Duración:</strong> {confirmation.durationMinutes} min</div>
           </div>
+          {confirmation.requiresTransfer && confirmation.transferInstructions && (
+            <div style={{ marginBottom: 20, textAlign: 'left' }}>
+              <TransferBanner instructions={confirmation.transferInstructions} />
+              <p style={{ fontSize: 13, color: '#555', marginTop: 8, lineHeight: 1.5 }}>
+                Realizá la transferencia y enviá el comprobante por WhatsApp para confirmar tu turno.
+              </p>
+            </div>
+          )}
           <Link href={`/book/${slug}`} style={{ color: '#6366f1', textDecoration: 'none', fontSize: 14 }}>← Ver otros tipos de cita</Link>
         </div>
       </div>
@@ -154,6 +182,10 @@ export default function BookTypePage() {
             <strong>{fmtDate(selectedSlot)}</strong> a las <strong>{fmtTime(selectedSlot)}</strong>
           </div>
 
+          {typeData?.requiresTransfer && typeData?.transferInstructions && (
+            <TransferBanner instructions={typeData.transferInstructions} />
+          )}
+
           {formError && (
             <div style={{ color: '#dc2626', fontSize: 13, padding: '10px 14px', background: '#fef2f2', borderRadius: 8, marginBottom: 14 }}>{formError}</div>
           )}
@@ -163,7 +195,7 @@ export default function BookTypePage() {
               { key: 'name',  label: 'Nombre completo',       type: 'text',  required: true,  placeholder: 'Juan García' },
               { key: 'phone', label: 'Teléfono (WhatsApp)',    type: 'tel',   required: true,  placeholder: '+5491112345678' },
               { key: 'email', label: 'Email (opcional)',       type: 'email', required: false, placeholder: 'juan@ejemplo.com' },
-              { key: 'notes', label: 'Notas (opcional)',       type: 'textarea', required: false, placeholder: 'Comentarios adicionales...' },
+              { key: 'notes', label: 'Motivo de la consulta (opcional)', type: 'textarea', required: false, placeholder: 'Comentarios adicionales...' },
             ].map(f => (
               <div key={f.key} style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
@@ -227,6 +259,10 @@ export default function BookTypePage() {
     <div style={{ maxWidth: 500, margin: '0 auto', padding: '32px 16px' }}>
       <Link href={`/book/${slug}`} style={{ fontSize: 13.5, color: '#6366f1', textDecoration: 'none', display: 'inline-block', marginBottom: 12 }}>← Volver</Link>
       <Header />
+
+      {typeData?.requiresTransfer && typeData?.transferInstructions && (
+        <TransferBanner instructions={typeData.transferInstructions} />
+      )}
 
       <div style={{ background: '#fff', borderRadius: 16, padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
         {/* Date picker */}

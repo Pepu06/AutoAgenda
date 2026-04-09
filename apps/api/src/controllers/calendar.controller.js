@@ -1,10 +1,10 @@
 const { supabase, convertKeys } = require('@autoagenda/db');
 const logger = require('../config/logger');
-const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor, createCalendarEvent } = require('../services/google');
+const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor, createCalendarEvent, listCalendars } = require('../services/google');
 const { sendTemplate } = require('../services/whatsapp');
 const { appointmentsQueue } = require('../workers/queue');
 const { JobName } = require('@autoagenda/shared');
-const { AppError } = require('../errors');
+const { AppError, ValidationError } = require('../errors');
 const { formatTime, formatTemplateHour } = require('../utils/datetime');
 
 function onlyDigits(value) {
@@ -13,8 +13,6 @@ function onlyDigits(value) {
 
 /**
  * Normaliza un número argentino tomando los últimos 8 dígitos y anteponiendo +54911.
- * Ej: "1538795045" → "+5491138795045"
- *     "+54911 3879-5045" → "+5491138795045"
  */
 function normalizePhone(raw = '') {
   const digits = onlyDigits(String(raw));
@@ -23,50 +21,32 @@ function normalizePhone(raw = '') {
   return last8.length === 8 ? `+54911${last8}` : null;
 }
 
-/**
- * Extrae teléfono, DNI, fecha de nacimiento y email desde la descripción del evento.
- * Formato esperado (todo opcional excepto teléfono):
- *   Teléfono: [1538795045]
- *   DNI: 36914783
- *   Nacimiento: 21/03/1995
- *   Mail: micaela@email.com
- */
 function extractDataFromDescription(description = '') {
   const desc = description || '';
 
-  // Teléfono: número entre corchetes [ ]
   const phoneMatch = desc.match(/\[\s*(\+?[\d\s\-(). ]{6,})\s*\]/);
   const phone = phoneMatch ? normalizePhone(phoneMatch[1]) : null;
 
-  // DNI: etiqueta "DNI:" seguida del número, o 8 dígitos solos (XX.XXX.XXX o XXXXXXXX)
   const dniLabelMatch = desc.match(/DNI\s*[:\s]\s*([\d.]{8,11})/i);
   const dniBarMatch   = desc.match(/\b(\d{2}\.?\d{3}\.?\d{3})\b/);
   const rawDni = dniLabelMatch ? dniLabelMatch[1] : (dniBarMatch ? dniBarMatch[1] : null);
   const dni = rawDni ? rawDni.replace(/\./g, '') : null;
 
-  // Fecha de nacimiento: etiqueta o formato DD/MM/AAAA, DD.MM.AAAA
   const dobMatch = desc.match(/(?:nacimiento|nac|fecha)[^:]*[:\s]\s*(\d{2}[\/.]?\d{2}[\/.]?\d{4})/i)
     || desc.match(/\b(\d{2})[\/.](\d{2})[\/.](\d{4})\b/);
   let birthDate = null;
   if (dobMatch) {
-    // Puede ser grupo 1 completo (label match) o grupos 1+2+3 (bare match)
     birthDate = dobMatch[3]
       ? `${dobMatch[1]}/${dobMatch[2]}/${dobMatch[3]}`
       : dobMatch[1].replace(/\./g, '/');
   }
 
-  // Email estándar
   const emailMatch = desc.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
   const email = emailMatch ? emailMatch[0] : null;
 
   return { phone, dni, birthDate, email };
 }
 
-/**
- * Extrae nombre y servicio del título del evento.
- * Formato esperado: "Nombre - Servicio"  (ej: "Micaela Sosa - Consulta")
- * Si no hay guion, todo es el nombre.
- */
 function extractFromTitle(summary = '') {
   const clean = (summary || '')
     .replace(/\s*-\s*(CONFIRMADO|CANCELADO)$/i, '')
@@ -87,7 +67,20 @@ function hasReminderConfig(tenant) {
 
 const REMINDER_CONFIG_ERROR = 'Completá Nombre del negocio y Mensaje personalizable en Configuración para poder crear citas y enviar recordatorios.';
 
-async function getValidToken(userId) {
+/**
+ * Returns the owner's chosen default calendar ID for a tenant.
+ */
+async function getOwnerCalendarId(tenantId) {
+  const { data } = await supabase
+    .from('users')
+    .select('default_google_calendar_id')
+    .eq('tenant_id', tenantId)
+    .eq('role', 'owner')
+    .maybeSingle();
+  return data?.default_google_calendar_id || 'primary';
+}
+
+async function getValidToken(userId, calendarId = 'primary') {
   const { data: user } = await supabase
     .from('users').select('google_access_token, google_refresh_token').eq('id', userId).single();
 
@@ -95,14 +88,13 @@ async function getValidToken(userId) {
 
   let { google_access_token: accessToken, google_refresh_token: refreshToken } = user;
 
-  // Try to fetch events; if expired, refresh and retry
+  // Test with primary calendar (token validation doesn't depend on calendarId)
   const test = await getCalendarEvents(accessToken, { days: 1 });
   if (test === null && refreshToken) {
     try {
       accessToken = await refreshAccessToken(refreshToken);
       await supabase.from('users').update({ google_access_token: accessToken }).eq('id', userId);
     } catch {
-      // Refresh token is revoked — mark as needing reconnect
       await supabase.from('users').update({
         google_access_token: null,
         google_reconnect_required: true,
@@ -158,6 +150,39 @@ async function disconnect(req, res, next) {
   } catch (err) { return next(err); }
 }
 
+// GET /calendar/default — returns the owner's default calendar ID
+async function getDefaultCalendar(req, res, next) {
+  try {
+    const { data: user } = await supabase
+      .from('users')
+      .select('default_google_calendar_id')
+      .eq('id', req.userId)
+      .single();
+    return res.json({ success: true, data: { calendarId: user?.default_google_calendar_id || 'primary' } });
+  } catch (err) { return next(err); }
+}
+
+// PUT /calendar/default — sets the owner's default calendar ID
+async function setDefaultCalendar(req, res, next) {
+  try {
+    const { calendarId } = req.body;
+    if (!calendarId) throw new ValidationError('calendarId es requerido.');
+
+    // Validate the calendar exists for this user
+    const { data: user } = await supabase
+      .from('users').select('google_access_token').eq('id', req.userId).single();
+
+    if (user?.google_access_token) {
+      const calendars = await listCalendars(user.google_access_token);
+      const valid = calendarId === 'primary' || calendars.some(c => c.id === calendarId);
+      if (!valid) throw new ValidationError('Calendario no encontrado en tu cuenta de Google.');
+    }
+
+    await supabase.from('users').update({ default_google_calendar_id: calendarId }).eq('id', req.userId);
+    return res.json({ success: true, data: { calendarId } });
+  } catch (err) { return next(err); }
+}
+
 async function events(req, res, next) {
   try {
     const accessToken = await getValidToken(req.userId);
@@ -172,15 +197,21 @@ async function events(req, res, next) {
 
     const canCreateAppointments = hasReminderConfig(tenantSettings);
 
-    const items = await getCalendarEvents(accessToken, { days: 30 }) || [];
+    const defaultCalendarId = await getOwnerCalendarId(req.tenantId);
+    const items = await getCalendarEvents(accessToken, defaultCalendarId, { days: 30 }) || [];
 
-    // Fetch DB appointments to use as authoritative status source
+    // Fetch DB appointments to use as authoritative status + transfer source
     const { data: synced } = await supabase
-      .from('appointments').select('google_event_id, status')
-      .eq('tenant_id', req.tenantId).not('google_event_id', 'is', null);
+      .from('appointments')
+      .select('google_event_id, status, id, transfer_confirmed, autoagenda_type:autoagenda_types(requires_transfer)')
+      .eq('tenant_id', req.tenantId)
+      .not('google_event_id', 'is', null);
 
     const syncedIds = new Set((synced || []).map(a => a.google_event_id)); // eslint-disable-line no-unused-vars
     const dbStatusMap = Object.fromEntries((synced || []).map(a => [a.google_event_id, a.status]));
+    const dbAppointmentId = Object.fromEntries((synced || []).map(a => [a.google_event_id, a.id]));
+    const dbTransferConfirmed = Object.fromEntries((synced || []).map(a => [a.google_event_id, a.transfer_confirmed]));
+    const dbRequiresTransfer = Object.fromEntries((synced || []).map(a => [a.google_event_id, a.autoagenda_type?.requires_transfer ?? false]));
 
     const COLOR_STATUS = { '5': 'pending', '2': 'confirmed', '11': 'cancelled' };
 
@@ -192,7 +223,6 @@ async function events(req, res, next) {
         const colorId = e.colorId || null;
         const phone = extractDataFromDescription(e.description || '').phone;
         const displayTitle = (e.summary || '(Sin título)').replace(/\s*-\s*(CONFIRMADO|CANCELADO)$/i, '').trim();
-        // DB status is authoritative; fall back to Google Calendar color
         const status = dbStatusMap[e.id] || COLOR_STATUS[colorId] || null;
         return {
           id: e.id,
@@ -205,9 +235,12 @@ async function events(req, res, next) {
           colorId,
           status,
           description: e.description || '',
+          appointmentId: dbAppointmentId[e.id] || null,
+          transferConfirmed: dbTransferConfirmed[e.id] ?? false,
+          requiresTransfer: dbRequiresTransfer[e.id] ?? false,
         };
       })
-      .filter(e => !!e.phone); // only events with a client phone number
+      .filter(e => !!e.phone);
 
     // Sync GCal color+title for events whose DB status differs from GCal color (best effort)
     const STATUS_SUFFIX = { confirmed: 'CONFIRMADO', cancelled: 'CANCELADO' };
@@ -217,13 +250,12 @@ async function events(req, res, next) {
       if (dbStatus && dbStatus !== gcalStatus) {
         const baseTitle = ev.title.replace(/\s*-\s*(CONFIRMADO|CANCELADO)$/i, '').trim();
         const newTitle = STATUS_SUFFIX[dbStatus] ? `${baseTitle} - ${STATUS_SUFFIX[dbStatus]}` : baseTitle;
-        updateEventTitleAndColor(accessToken, ev.id, newTitle, dbStatus, { sendUpdates: 'none' }).catch(() => { });
+        updateEventTitleAndColor(accessToken, ev.id, newTitle, dbStatus, { sendUpdates: 'none', calendarId: defaultCalendarId }).catch(() => { });
       }
     }
 
     let contacts = [];
 
-    // Ensure contacts exist for calendar events with phone
     if (data.length && canCreateAppointments) {
       const { data: existingContacts, error: contactsError } = await supabase
         .from('contacts')
@@ -264,7 +296,6 @@ async function events(req, res, next) {
         contacts.push(createdContact);
       }
 
-      // Fetch all services to match by description
       let { data: allServices } = await supabase
         .from('services')
         .select('id, name')
@@ -281,9 +312,6 @@ async function events(req, res, next) {
         allServices = [createdService];
       }
 
-      // Match service from event title: "Nombre - Servicio"
-      // If found in title but doesn't exist → create it.
-      // If no service in title → use default service.
       async function matchService(titleService, durationMinutes = 30) {
         if (!titleService) return allServices[0];
 
@@ -291,7 +319,6 @@ async function events(req, res, next) {
         const matched = allServices.find(s => s.name.toLowerCase() === serviceName.toLowerCase());
         if (matched) return matched;
 
-        // Create service on the fly using the event's duration
         const { data: created, error: createErr } = await supabase
           .from('services')
           .insert({ tenant_id: req.tenantId, name: serviceName, duration_minutes: durationMinutes, price: 0 })
@@ -305,7 +332,6 @@ async function events(req, res, next) {
         return created;
       }
 
-      // Ensure appointments exist for calendar events with phone
       for (const event of data) {
         if (syncedIds.has(event.id)) continue;
 
@@ -341,11 +367,9 @@ async function events(req, res, next) {
         if (createAppointmentError) throw createAppointmentError;
         syncedIds.add(event.id);
 
-        // Queue WhatsApp jobs for calendar-synced appointments
         if (newAppointment) {
           const queueJob = (name, opts = {}) =>
             appointmentsQueue.add(name, { appointmentId: newAppointment.id }, opts).catch(() => { });
-
           queueJob(JobName.SEND_CONFIRMATION);
         }
       }
@@ -364,7 +388,6 @@ async function events(req, res, next) {
   } catch (err) { return next(err); }
 }
 
-// Update appointment status on Google Calendar event (color + title suffix)
 async function updateEventStatus(req, res, next) {
   try {
     const { eventId } = req.params;
@@ -375,7 +398,8 @@ async function updateEventStatus(req, res, next) {
     const accessToken = await getValidToken(req.userId);
     if (!accessToken) throw new AppError('Google Calendar no conectado', 400);
 
-    const event = await getCalendarEvent(accessToken, eventId);
+    const defaultCalendarId = await getOwnerCalendarId(req.tenantId);
+    const event = await getCalendarEvent(accessToken, eventId, defaultCalendarId);
     if (!event) throw new AppError('Evento no encontrado', 404);
 
     const STATUS_SUFFIX = { confirmed: 'CONFIRMADO', cancelled: 'CANCELADO' };
@@ -386,9 +410,9 @@ async function updateEventStatus(req, res, next) {
 
     await updateEventTitleAndColor(accessToken, eventId, newTitle, status, {
       sendUpdates: shouldNotifyByEmail ? 'all' : 'none',
+      calendarId: defaultCalendarId,
     });
 
-    // Also update DB if there's a matching appointment
     await supabase
       .from('appointments')
       .update({ status })
@@ -399,7 +423,6 @@ async function updateEventStatus(req, res, next) {
   } catch (err) { return next(err); }
 }
 
-// Send WhatsApp reminder for a specific calendar event using the approved Meta template
 async function remindEvent(req, res, next) {
   try {
     const { eventId } = req.params;
@@ -407,7 +430,8 @@ async function remindEvent(req, res, next) {
     const accessToken = await getValidToken(req.userId);
     if (!accessToken) throw new AppError('Google Calendar no conectado', 400);
 
-    const event = await getCalendarEvent(accessToken, eventId);
+    const defaultCalendarId = await getOwnerCalendarId(req.tenantId);
+    const event = await getCalendarEvent(accessToken, eventId, defaultCalendarId);
     if (!event) throw new AppError('Evento no encontrado', 404);
 
     const phone = extractDataFromDescription(event.description || '').phone;
@@ -415,7 +439,6 @@ async function remindEvent(req, res, next) {
 
     const start = event.start?.dateTime || (event.start?.date ? `${event.start.date}T12:00:00` : null);
 
-    // Get appointment from DB to obtain id and client name
     let clientName = null;
     const { data: appointment } = await supabase
       .from('appointments')
@@ -430,7 +453,6 @@ async function remindEvent(req, res, next) {
       clientName = extractFromTitle(event.summary || '').name;
     }
 
-    // Fetch tenant settings
     const { data: tenant } = await supabase
       .from('tenants')
       .select('business_name, message_template, timezone, time_format, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode')
@@ -439,7 +461,6 @@ async function remindEvent(req, res, next) {
 
     if (!hasReminderConfig(tenant)) throw new AppError(REMINDER_CONFIG_ERROR, 400);
 
-    // Format date and time
     const dateObj = start ? new Date(start) : null;
     const tenantTz = tenant?.timezone || 'America/Argentina/Buenos_Aires';
     const fechaLabel = dateObj
@@ -459,7 +480,6 @@ async function remindEvent(req, res, next) {
 
     const encabezado = tenant?.business_name;
     const mensajeEditable = (tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ');
-    // Location: use Google Calendar event location if mode is 'calendar', else tenant fixed location
     const ubicacion = (tenant?.location_mode === 'calendar' && event?.location)
       ? event.location
       : (tenant?.location || '');
@@ -471,7 +491,6 @@ async function remindEvent(req, res, next) {
       wasender_api_key: tenant?.wasender_api_key,
     };
 
-    // Send reminder template with appointmentId in button payloads
     await sendTemplate(phone, 'recordatorio_turno', {
       header: [{ name: 'encabezado', value: encabezado }],
       body: [
@@ -503,8 +522,7 @@ async function remindEvent(req, res, next) {
         .catch(() => { });
     }
 
-    // Mark event as pending (yellow) in Calendar
-    updateEventColor(accessToken, eventId, 'pending').catch(() => { });
+    updateEventColor(accessToken, eventId, 'pending', defaultCalendarId).catch(() => { });
 
     return res.json({ success: true, phone });
   } catch (err) { return next(err); }
@@ -543,9 +561,9 @@ async function createEvent(req, res, next) {
       .single();
     if (error) throw error;
 
-    // Create Google Calendar event
     const accessToken = await getValidToken(req.userId);
     if (accessToken) {
+      const defaultCalendarId = await getOwnerCalendarId(req.tenantId);
       const startDate = new Date(scheduledAt);
       const endDate = new Date(startDate.getTime() + service.duration_minutes * 60000);
       const attendees = contact.email ? [contact.email] : [];
@@ -557,14 +575,13 @@ async function createEvent(req, res, next) {
         endDateTime: endDate.toISOString(),
         attendees,
         location: tenantSettings.location_mode === 'calendar' ? (location || '') : undefined,
-      }).catch(() => null);
+      }, defaultCalendarId).catch(() => null);
 
       if (calEvent?.id) {
         await supabase.from('appointments').update({ google_event_id: calEvent.id }).eq('id', appointment.id);
       }
     }
 
-    // Queue WhatsApp jobs
     const queueJob = (name, opts = {}) =>
       appointmentsQueue.add(name, { appointmentId: appointment.id }, opts).catch(() => { });
 
@@ -575,4 +592,4 @@ async function createEvent(req, res, next) {
 }
 
 
-module.exports = { calendarStatus, connect, disconnect, events, createEvent, updateEventStatus, remindEvent };
+module.exports = { calendarStatus, connect, disconnect, events, createEvent, updateEventStatus, remindEvent, getDefaultCalendar, setDefaultCalendar };

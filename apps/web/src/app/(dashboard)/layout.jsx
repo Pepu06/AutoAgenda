@@ -5,6 +5,20 @@ import { useRouter, usePathname } from 'next/navigation';
 import { isAuthenticated, clearAuth, getToken } from '../../lib/auth';
 import { api } from '../../lib/api';
 import styles from './dashboard.module.css';
+import { TourProvider, useTour } from '../../components/tour/TourProvider';
+
+function TourBannerButton({ onDismiss }) {
+  const { startTour } = useTour();
+  return (
+    <button
+      onClick={() => { startTour(0); onDismiss(); }}
+      className={styles.setupBannerLink}
+      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 600, textDecoration: 'underline', fontSize: 'inherit', color: 'inherit' }}
+    >
+      Hacer el tour guiado →
+    </button>
+  );
+}
 
 const navItems = [
   {
@@ -66,6 +80,7 @@ const navItems = [
   },
   {
     href: '/tu-autoagenda',
+    tourId: 'nav-tu-autoagenda',
     label: 'TuAutoAgenda',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -89,6 +104,7 @@ const navItems = [
   },
   {
     href: '/settings',
+    tourId: 'nav-settings',
     label: 'Configuración',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -199,6 +215,7 @@ export default function DashboardLayout({ children }) {
   const { initials, businessName, profilePicture } = profile;
 
   return (
+    <TourProvider>
     <div className={styles.layout}>
       {/* Mobile Header */}
       <div className={styles.mobileHeader}>
@@ -264,6 +281,7 @@ export default function DashboardLayout({ children }) {
               key={item.href}
               href={item.href}
               data-label={item.label}
+              {...(item.tourId ? { 'data-tour': item.tourId } : {})}
               className={`${styles.navItem} ${pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)) ? styles.active : ''}`}
             >
               <span className={styles.navIcon}>{item.icon}</span>
@@ -338,7 +356,7 @@ export default function DashboardLayout({ children }) {
             >×</button>
           </div>
         )}
-        {setupBanner && pathname !== '/setup' && (
+        {setupBanner && (
           <div className={styles.setupBanner}>
             <span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', verticalAlign: 'middle' }}>
@@ -347,7 +365,7 @@ export default function DashboardLayout({ children }) {
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
               Tu cuenta no está completamente configurada.{' '}
-              <a href="/setup" className={styles.setupBannerLink}>Completar configuración →</a>
+              <TourBannerButton onDismiss={() => { sessionStorage.setItem('setup_banner_dismissed', '1'); setSetupBanner(false); }} />
             </span>
             <button
               className={styles.setupBannerClose}
@@ -361,5 +379,6 @@ export default function DashboardLayout({ children }) {
         </div>
       </div>
     </div>
+    </TourProvider>
   );
 }

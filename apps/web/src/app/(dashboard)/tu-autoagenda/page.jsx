@@ -175,7 +175,7 @@ export default function TuAutoAgendaPage() {
       <h1 className={styles.pageTitle}>TuAutoAgenda</h1>
 
       {/* SECTION: Profile */}
-      <div className={styles.section}>
+      <div className={styles.section} data-tour="publish-form">
         <h2 className={styles.sectionTitle}>Configuración</h2>
         <p className={styles.sectionSub}>
           Crea un sitio web que puedes compartir con tus clientes para que se agenden por sí mismos.
@@ -277,7 +277,7 @@ export default function TuAutoAgendaPage() {
               Crea tus horarios de trabajo. Si quieres bloquear fechas en un horario haz click en "Editar" y luego en "Modificar por fecha." Elige las fechas que quieras y márcalas como "No Disponible."
             </p>
           </div>
-          <button className={styles.btnPrimary} onClick={openCreateSchedule}>Crear Horario</button>
+          <button className={styles.btnPrimary} onClick={openCreateSchedule} data-tour="schedule-btn">Crear Horario</button>
         </div>
 
         {schedulesLoading ? (
@@ -320,7 +320,7 @@ export default function TuAutoAgendaPage() {
               Define los servicios que aparecerán en tu autoagenda, cada uno con su duración y horario. Por ejemplo: "Cita de fisioterapía - 30 minutos".
             </p>
           </div>
-          <button className={styles.btnPrimary} onClick={() => router.push('/tu-autoagenda/types/new')}>Crear tipo de cita</button>
+          <button className={styles.btnPrimary} onClick={() => router.push('/tu-autoagenda/types/new')} data-tour="type-btn">Crear tipo de cita</button>
         </div>
 
         {typesLoading ? (

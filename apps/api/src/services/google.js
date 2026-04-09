@@ -44,8 +44,23 @@ async function getUserInfo(accessToken) {
   return res.json();
 }
 
-// Returns events array, or null if token is expired (401)
-async function getCalendarEvents(accessToken, { days = 30 } = {}) {
+/**
+ * Returns events array, or null if token is expired (401).
+ * Signature: getCalendarEvents(accessToken, calendarIdOrOpts?, opts?)
+ *   Legacy:  getCalendarEvents(accessToken, { days })
+ *   New:     getCalendarEvents(accessToken, calendarId, { days })
+ */
+async function getCalendarEvents(accessToken, calendarIdOrOpts = 'primary', opts = {}) {
+  let calendarId, days;
+  if (typeof calendarIdOrOpts === 'object' && calendarIdOrOpts !== null) {
+    // Legacy call: getCalendarEvents(token, { days: N })
+    calendarId = 'primary';
+    days = calendarIdOrOpts.days ?? 30;
+  } else {
+    calendarId = calendarIdOrOpts || 'primary';
+    days = opts.days ?? 30;
+  }
+
   const timeMin = new Date().toISOString();
   const timeMax = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 
@@ -57,7 +72,7 @@ async function getCalendarEvents(accessToken, { days = 30 } = {}) {
     timeMax,
   });
 
-  const res = await fetch(`${CAL_BASE}/calendars/primary/events?${params}`, {
+  const res = await fetch(`${CAL_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
@@ -78,11 +93,11 @@ const STATUS_COLORS = {
   cancelled: '11', // Tomato  (red)
 };
 
-async function updateEventColor(accessToken, eventId, status) {
+async function updateEventColor(accessToken, eventId, status, calendarId = 'primary') {
   const colorId = STATUS_COLORS[status];
   if (!colorId || !eventId) return;
 
-  await fetch(`${CAL_BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+  await fetch(`${CAL_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
     method: 'PATCH',
     headers: {
       Authorization:  `Bearer ${accessToken}`,
@@ -92,15 +107,15 @@ async function updateEventColor(accessToken, eventId, status) {
   });
 }
 
-async function getCalendarEvent(accessToken, eventId) {
-  const res = await fetch(`${CAL_BASE}/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+async function getCalendarEvent(accessToken, eventId, calendarId = 'primary') {
+  const res = await fetch(`${CAL_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) return null;
   return res.json();
 }
 
-async function updateEventTitleAndColor(accessToken, eventId, title, status, { sendUpdates = 'none' } = {}) {
+async function updateEventTitleAndColor(accessToken, eventId, title, status, { sendUpdates = 'none', calendarId = 'primary' } = {}) {
   const patch = {};
   if (title) patch.summary = title;
   if (status && STATUS_COLORS[status]) patch.colorId = STATUS_COLORS[status];
@@ -109,7 +124,7 @@ async function updateEventTitleAndColor(accessToken, eventId, title, status, { s
   const params = new URLSearchParams();
   if (sendUpdates && sendUpdates !== 'none') params.set('sendUpdates', sendUpdates);
 
-  const url = `${CAL_BASE}/calendars/primary/events/${encodeURIComponent(eventId)}${params.toString() ? `?${params}` : ''}`;
+  const url = `${CAL_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}${params.toString() ? `?${params}` : ''}`;
 
   const res = await fetch(url, {
     method: 'PATCH',
@@ -133,7 +148,7 @@ async function updateEventTitleAndColor(accessToken, eventId, title, status, { s
 }
 
 // Fetch today's events in Argentina time (UTC-3)
-async function getTodayCalendarEvents(accessToken) {
+async function getTodayCalendarEvents(accessToken, calendarId = 'primary') {
   const now = new Date();
   // Argentina is always UTC-3
   const AR_OFFSET_MS = -3 * 60 * 60 * 1000;
@@ -157,7 +172,7 @@ async function getTodayCalendarEvents(accessToken) {
     timeMax,
   });
 
-  const res = await fetch(`${CAL_BASE}/calendars/primary/events?${params}`, {
+  const res = await fetch(`${CAL_BASE}/calendars/${encodeURIComponent(calendarId)}/events?${params}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
@@ -166,7 +181,7 @@ async function getTodayCalendarEvents(accessToken) {
   return data.items || [];
 }
 
-async function createCalendarEvent(accessToken, { summary, description, startDateTime, endDateTime, attendees = [], location }) {
+async function createCalendarEvent(accessToken, { summary, description, startDateTime, endDateTime, attendees = [], location }, calendarId = 'primary') {
   const body = {
     summary,
     description,
@@ -179,7 +194,7 @@ async function createCalendarEvent(accessToken, { summary, description, startDat
   const params = new URLSearchParams();
   if (attendees.length) params.set('sendUpdates', 'all');
 
-  const url = `${CAL_BASE}/calendars/primary/events${params.toString() ? `?${params}` : ''}`;
+  const url = `${CAL_BASE}/calendars/${encodeURIComponent(calendarId)}/events${params.toString() ? `?${params}` : ''}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -202,34 +217,9 @@ async function listCalendars(accessToken) {
   return (data.items || []).map(c => ({ id: c.id, summary: c.summary, primary: !!c.primary }));
 }
 
-// Same as createCalendarEvent but allows specifying a calendarId (defaults to 'primary')
+// Same as createCalendarEvent but always explicit about calendarId (kept for compat)
 async function createCalendarEventInCalendar(accessToken, calendarId, eventData) {
-  const calId = calendarId || 'primary';
-  const { summary, description, startDateTime, endDateTime, attendees = [], location } = eventData;
-  const body = {
-    summary,
-    description,
-    start: { dateTime: startDateTime },
-    end:   { dateTime: endDateTime },
-  };
-  if (location) body.location = location;
-  if (attendees.length) body.attendees = attendees.map(email => ({ email }));
-
-  const params = new URLSearchParams();
-  if (attendees.length) params.set('sendUpdates', 'all');
-
-  const url = `${CAL_BASE}/calendars/${encodeURIComponent(calId)}/events${params.toString() ? `?${params}` : ''}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(`Google Calendar POST failed (${res.status}): ${data?.error?.message || 'unknown error'}`);
-  }
-  return res.json();
+  return createCalendarEvent(accessToken, eventData, calendarId || 'primary');
 }
 
 module.exports = {

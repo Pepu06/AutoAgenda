@@ -30,6 +30,7 @@ const EMPTY_FORM = {
   scheduleId: '', serviceId: '', googleCalendarId: '',
   minHoursBeforeBooking: 0, maxDaysInFuture: null,
   maxConcurrentBookings: 1, extraQuestions: [], price: 0,
+  requiresTransfer: false, transferInstructions: '',
 };
 
 export default function TypeFormPage() {
@@ -68,6 +69,8 @@ export default function TypeFormPage() {
               maxConcurrentBookings: d.maxConcurrentBookings || 1,
               extraQuestions:        d.extraQuestions || [],
               price:                 d.service?.price ?? d.price ?? 0,
+              requiresTransfer:      d.requiresTransfer ?? false,
+              transferInstructions:  d.transferInstructions || '',
             });
           })
           .catch(() => router.push('/tu-autoagenda'))
@@ -114,6 +117,8 @@ export default function TypeFormPage() {
         maxConcurrentBookings: Number(form.maxConcurrentBookings) || 1,
         extraQuestions:        form.extraQuestions.filter(q => q.label.trim()),
         price:                 Number(form.price) || 0,
+        requiresTransfer:      Boolean(form.requiresTransfer),
+        transferInstructions:  form.requiresTransfer ? (form.transferInstructions || null) : null,
       };
       if (isNew) {
         await api.post('/autoagenda/types', payload);
@@ -181,6 +186,35 @@ export default function TypeFormPage() {
               placeholder="0"
             />
             <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>Si es gratis, dejalo en 0. Se muestra en la página de reservas.</p>
+          </div>
+
+          <div className={styles.field}>
+            <div className={styles.toggleRow} style={{ marginBottom: 0 }}>
+              <div>
+                <div className={styles.toggleLabel}>Requiere transferencia bancaria para confirmar</div>
+                <div className={styles.toggleSub}>El cliente verá las instrucciones de pago al reservar.</div>
+              </div>
+              <label className={styles.toggle}>
+                <input
+                  type="checkbox"
+                  checked={!!form.requiresTransfer}
+                  onChange={e => setField('requiresTransfer', e.target.checked)}
+                />
+                <span className={styles.toggleSlider} />
+              </label>
+            </div>
+            {form.requiresTransfer && (
+              <div style={{ marginTop: 12 }}>
+                <label className={styles.label}>Instrucciones de transferencia (CBU, alias, monto)</label>
+                <textarea
+                  className={styles.textarea}
+                  placeholder="CBU: 0000000000000000000000&#10;Alias: mi.negocio&#10;Banco: Santander&#10;Titular: Juan García&#10;Monto: $5000"
+                  value={form.transferInstructions}
+                  onChange={e => setField('transferInstructions', e.target.value)}
+                  rows={4}
+                />
+              </div>
+            )}
           </div>
 
           {gcalendars.length > 0 && (

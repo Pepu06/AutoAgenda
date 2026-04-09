@@ -171,3 +171,12 @@ a { color: inherit; text-decoration: none; }
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* Tour highlight — injected via JS by TourProvider */
+.tour-highlight {
+  position: relative !important;
+  z-index: 9001 !important;
+  box-shadow: 0 0 0 4px #6366f1, 0 0 0 9999px rgba(0, 0, 0, 0.55) !important;
+  border-radius: 8px !important;
+  transition: box-shadow 0.2s ease !important;
+}

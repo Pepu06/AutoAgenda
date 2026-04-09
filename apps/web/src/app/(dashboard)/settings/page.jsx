@@ -169,7 +169,7 @@ export default function SettingsPage() {
       </div>
 
       {/* GENERAL */}
-      <section className={styles.section}>
+      <section className={styles.section} data-tour="settings-general">
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>General</h2>
           <p className={styles.sectionDesc}>Información básica de tu negocio</p>
@@ -204,7 +204,7 @@ export default function SettingsPage() {
       </section>
 
       {/* MENSAJE */}
-      <section className={styles.section}>
+      <section className={styles.section} data-tour="settings-mensaje">
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Mensaje</h2>
           <p className={styles.sectionDesc}>Personalizá el texto que aparece en el mensaje de recordatorio</p>
@@ -253,7 +253,7 @@ export default function SettingsPage() {
       </section>
 
       {/* RESPUESTAS AUTOMÁTICAS */}
-      <section className={styles.section}>
+      <section className={styles.section} data-tour="settings-respuestas">
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Respuestas automáticas</h2>
           <p className={styles.sectionDesc}>Mensajes que el bot envía al cliente cuando confirma o cancela su turno</p>
@@ -287,7 +287,7 @@ export default function SettingsPage() {
       </section>
 
       {/* RECORDATORIOS */}
-      <section className={styles.section}>
+      <section className={styles.section} data-tour="settings-recordatorios">
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Recordatorios</h2>
           <p className={styles.sectionDesc}>Cuándo se envía el recordatorio automático al cliente</p>
@@ -322,7 +322,7 @@ export default function SettingsPage() {
       </section>
 
       {/* BOT */}
-      <section className={styles.section}>
+      <section className={styles.section} data-tour="settings-bot-admin">
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Bot (Admin)</h2>
           <p className={styles.sectionDesc}>Alertas y reportes para el administrador</p>
@@ -394,7 +394,7 @@ export default function SettingsPage() {
       </section>
 
       {/* UBICACIÓN */}
-      <section className={styles.section}>
+      <section className={styles.section} data-tour="settings-ubicacion">
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Ubicación</h2>
           <p className={styles.sectionDesc}>Dirección que se incluye en el recordatorio al cliente</p>

@@ -262,6 +262,7 @@ async function createType(req, res, next) {
       minHoursBeforeBooking = 0, maxDaysInFuture,
       maxConcurrentBookings = 1, extraQuestions = [],
       price = 0,
+      requiresTransfer = false, transferInstructions,
     } = req.body;
 
     if (!title?.trim()) throw new ValidationError('El título es requerido.');
@@ -300,6 +301,8 @@ async function createType(req, res, next) {
       max_days_in_future:       maxDaysInFuture ? Number(maxDaysInFuture) : null,
       max_concurrent_bookings:  Number(maxConcurrentBookings) || 1,
       extra_questions:          extraQuestions,
+      requires_transfer:        Boolean(requiresTransfer),
+      transfer_instructions:    transferInstructions || null,
     }).select('*, service:services(name, price), schedule:schedules(name)').single();
     if (error) throw error;
 
@@ -313,10 +316,6 @@ async function updateType(req, res, next) {
       .from('autoagenda_types').select('id').eq('id', req.params.id).eq('tenant_id', req.tenantId).maybeSingle();
     if (!existing) throw new NotFoundError('Tipo de cita no encontrado.');
 
-    const ALLOWED = ['title', 'description', 'schedule_id', 'service_id', 'duration_minutes',
-      'google_calendar_id', 'min_hours_before_booking', 'max_days_in_future',
-      'max_concurrent_bookings', 'extra_questions'];
-
     const updates = {};
     const b = req.body;
     if (b.title !== undefined)                updates.title                    = b.title.trim();
@@ -329,8 +328,10 @@ async function updateType(req, res, next) {
     if (b.maxDaysInFuture !== undefined)       updates.max_days_in_future        = b.maxDaysInFuture ? Number(b.maxDaysInFuture) : null;
     if (b.maxConcurrentBookings !== undefined) updates.max_concurrent_bookings   = Number(b.maxConcurrentBookings) || 1;
     if (b.extraQuestions !== undefined)        updates.extra_questions           = b.extraQuestions;
+    if (b.requiresTransfer !== undefined)      updates.requires_transfer         = Boolean(b.requiresTransfer);
+    if (b.transferInstructions !== undefined)  updates.transfer_instructions     = b.transferInstructions || null;
 
-    if (!Object.keys(updates).length && b.price === undefined) throw new AppError('No hay campos para actualizar.', 400);
+    if (!Object.keys(updates).length && b.price === undefined && b.requiresTransfer === undefined && b.transferInstructions === undefined) throw new AppError('No hay campos para actualizar.', 400);
 
     // Validate schedule if changed
     if (updates.schedule_id) {
