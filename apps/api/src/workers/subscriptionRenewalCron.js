@@ -5,7 +5,7 @@ const { getPlanConfig } = require('../services/mercadopago');
 const env = require('../config/env');
 const logger = require('../config/logger');
 
-const PLAN_NAMES = { basic: 'Plan Inicial', pro: 'Plan Profesional' };
+const PLAN_NAMES = { inicial: 'Plan Inicial', profesional: 'Plan Profesional', custom: 'Plan Custom' };
 
 function buildRenewalContent(planName, price, expiresAt) {
   const cbu = env.PAYMENT_CBU;
@@ -55,7 +55,7 @@ async function sendRenewalReminders() {
     .from('subscriptions')
     .select('id, tenant_id, plan, current_period_end')
     .eq('status', 'active')
-    .in('plan', ['basic', 'pro'])
+    .in('plan', ['inicial', 'profesional', 'custom'])
     .lte('current_period_end', in3Days.toISOString())
     .gte('current_period_end', now.toISOString());
 
@@ -118,7 +118,7 @@ async function deactivateExpiredSubscriptions() {
     .from('subscriptions')
     .update({ status: 'cancelled', updated_at: now.toISOString() })
     .eq('status', 'active')
-    .in('plan', ['basic', 'pro'])
+    .in('plan', ['inicial', 'profesional', 'custom'])
     .lt('current_period_end', now.toISOString());
 
   if (error) {

@@ -102,6 +102,22 @@ async function runDailyReminders() {
     };
 
     try {
+      // Claim atomically first — only succeeds if reminder_sent_at is still null
+      // This prevents duplicate sends when multiple instances run in parallel
+      const reminderTime = new Date().toISOString();
+      const { data: claimed } = await supabase
+        .from('appointments')
+        .update({ reminder_sent_at: reminderTime, status: 'pending' })
+        .eq('id', appt.id)
+        .is('reminder_sent_at', null)
+        .select('id');
+
+      if (!claimed || claimed.length === 0) {
+        logger.info({ appointmentId: appt.id }, 'Reminder already claimed by another instance, skipping');
+        continue;
+      }
+
+      // Now send the reminder
       const whatsappResponse = await sendTemplate(appt.contact.phone, 'recordatorio_turno', {
         header: [{ name: 'encabezado', value: encabezado }],
         body: [
@@ -118,11 +134,6 @@ async function runDailyReminders() {
       }, tenantConfig);
 
       const waMessageId = whatsappResponse?.messages?.[0]?.id || null;
-
-      await supabase
-        .from('appointments')
-        .update({ reminder_sent_at: new Date().toISOString(), status: 'pending' })
-        .eq('id', appt.id);
 
       await supabase.from('message_logs').insert({
         tenant_id: appt.tenant_id,
