@@ -84,9 +84,15 @@ async function syncGCalDates(ownerTokenCache) {
       continue; // skip on API error, don't block reminder loop
     }
 
-    if (!gcalEvent || gcalEvent.status === 'cancelled') {
+    // Only mark cancelled if status is explicitly 'cancelled' in Google Calendar
+    // Don't touch DB if event not found or API failed
+    if (!gcalEvent) {
+      continue;
+    }
+
+    if (gcalEvent.status === 'cancelled') {
       await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', appt.id);
-      logger.info({ appointmentId: appt.id }, 'syncGCalDates: event deleted/cancelled, appointment marked cancelled');
+      logger.info({ appointmentId: appt.id }, 'syncGCalDates: event cancelled in GCal, appointment marked cancelled');
       continue;
     }
 
@@ -192,9 +198,10 @@ async function runDailyReminders() {
         if (ownerData) {
           let gcalEvent;
           try { gcalEvent = await getCalendarEvent(ownerData.accessToken, appt.google_event_id, ownerData.calendarId); } catch { /* skip */ }
-          if (gcalEvent !== undefined && (!gcalEvent || gcalEvent.status === 'cancelled')) {
+          // Only skip if event is explicitly cancelled; don't mark as cancelled if not found
+          if (gcalEvent && gcalEvent.status === 'cancelled') {
             await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', appt.id);
-            logger.info({ appointmentId: appt.id }, 'Reminder skipped: GCal event deleted or cancelled');
+            logger.info({ appointmentId: appt.id }, 'Reminder skipped: GCal event cancelled');
             continue;
           }
         }
