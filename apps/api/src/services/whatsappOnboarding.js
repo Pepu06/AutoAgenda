@@ -25,10 +25,11 @@ async function verifyPhoneNumber(phoneNumberId) {
  * Path A — Embedded Signup: exchange the OAuth code returned by the FB SDK
  * for a user access token that lets us identify which WABA they own.
  */
-async function exchangeCodeForUserToken(code) {
+async function exchangeCodeForUserToken(code, redirectUri) {
   const params = new URLSearchParams({
     client_id:     env.META_APP_ID,
     client_secret: env.META_APP_SECRET,
+    redirect_uri:  redirectUri || '',
     code,
   });
 

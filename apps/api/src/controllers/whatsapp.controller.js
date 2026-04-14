@@ -67,13 +67,13 @@ async function connectEmbeddedSignup(req, res, next) {
       throw new AppError('Embedded Signup no está configurado en este servidor', 501);
     }
 
-    const { code } = req.body;
+    const { code, redirectUri } = req.body;
     if (!code) throw new ValidationError('code es requerido');
 
     // Exchange code for user token
     let userToken;
     try {
-      userToken = await exchangeCodeForUserToken(code);
+      userToken = await exchangeCodeForUserToken(code, redirectUri);
     } catch (err) {
       throw new AppError(`Error al autenticar con Meta: ${err.message}`, 400);
     }
