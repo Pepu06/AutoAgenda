@@ -1,4 +1,5 @@
 const { supabase } = require('@autoagenda/db');
+const { randomUUID } = require('crypto');
 const logger = require('../config/logger');
 
 /**
@@ -76,6 +77,7 @@ async function trackMessageSent(tenantId, messageType = 'unknown') {
       const { error: insertError } = await supabase
         .from('usage_records')
         .insert({
+          id: randomUUID(),
           tenant_id: tenantId,
           year: year,
           month: month,
