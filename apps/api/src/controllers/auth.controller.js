@@ -108,7 +108,7 @@ async function googleAuth(req, res, next) {
       await supabase.from('users').update({
         google_access_token:  access_token,
         google_refresh_token: refresh_token || user.google_refresh_token,
-        email_verified: true, // Google already verified the email
+        email_verified: true,
       }).eq('id', user.id);
 
       const { data: tenant } = await supabase.from('tenants').select('name').eq('id', user.tenant_id).maybeSingle();
@@ -129,7 +129,7 @@ async function googleAuth(req, res, next) {
         role:                 'owner',
         google_access_token:  access_token,
         google_refresh_token: refresh_token || null,
-        email_verified:       true, // Google already verified the email
+        email_verified:       true,
       }).select().single();
     if (userErr) throw userErr;
 

@@ -3,6 +3,7 @@ const { sendTemplate } = require('../services/whatsapp');
 const { getCalendarEvent, refreshAccessToken } = require('../services/google');
 const logger = require('../config/logger');
 const { formatTime } = require('../utils/datetime');
+const { checkUsageLimit } = require('../middleware/checkUsage');
 
 async function sendConfirmation({ appointmentId }) {
   const { data: appointment } = await supabase
@@ -18,6 +19,12 @@ async function sendConfirmation({ appointmentId }) {
 
   if (appointment.tenant?.messaging_enabled !== true) {
     logger.info({ appointmentId }, 'Skipping confirmation, messaging disabled');
+    return;
+  }
+
+  const usageCheck = await checkUsageLimit(appointment.tenant_id);
+  if (!usageCheck.allowed) {
+    logger.warn({ appointmentId, reason: usageCheck.reason }, 'Skipping confirmation, usage limit reached');
     return;
   }
 

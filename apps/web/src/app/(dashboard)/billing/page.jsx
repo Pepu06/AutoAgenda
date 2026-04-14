@@ -64,6 +64,11 @@ export default function BillingPage() {
     ? 0
     : (usage.messagesSent || 0) / usage.messageLimit;
   const isWarning = !usage?.unlimited && usageRatio >= 0.8;
+  const formattedPrice = typeof planDetails?.price === 'number'
+    ? (planDetails.price === 0
+        ? 'Gratis'
+        : `$${Number(planDetails.price).toLocaleString('es-AR')} ARS/mes`)
+    : '—';
 
   return (
     <div className={s.page}>
@@ -165,7 +170,7 @@ export default function BillingPage() {
           <div className={s.planRow}>
             <span className={s.planRowLabel}>Precio</span>
             <span className={s.planRowValue}>
-              {planDetails?.price === 0 ? 'Gratis' : planDetails?.price ? `$${(planDetails.price / 1000).toFixed(1)}K ARS/mes` : '—'}
+              {formattedPrice}
             </span>
           </div>
           <div className={s.planRow}>

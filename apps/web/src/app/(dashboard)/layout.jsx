@@ -6,6 +6,8 @@ import { isAuthenticated, clearAuth, getToken } from '../../lib/auth';
 import { api } from '../../lib/api';
 import styles from './dashboard.module.css';
 import { TourProvider, useTour } from '../../components/tour/TourProvider';
+import { TenantProvider } from '../../context/TenantContext';
+import { TenantSwitcher } from '../../components/TenantSwitcher';
 
 function TourBannerButton({ onDismiss }) {
   const { startTour } = useTour();
@@ -215,6 +217,7 @@ export default function DashboardLayout({ children }) {
   const { initials, businessName, profilePicture } = profile;
 
   return (
+    <TenantProvider>
     <TourProvider>
     <div className={styles.layout}>
       {/* Mobile Header */}
@@ -291,6 +294,7 @@ export default function DashboardLayout({ children }) {
         </nav>
 
         <div className={styles.sidebarBottom}>
+          <TenantSwitcher />
           <div className={styles.userRow}>
             {profilePicture ? (
               <img src={profilePicture} alt={businessName} className={styles.avatar} />
@@ -380,5 +384,6 @@ export default function DashboardLayout({ children }) {
       </div>
     </div>
     </TourProvider>
+    </TenantProvider>
   );
 }

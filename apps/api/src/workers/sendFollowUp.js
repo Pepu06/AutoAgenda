@@ -2,6 +2,7 @@ const { supabase } = require('@autoagenda/db');
 const { sendTemplate } = require('../services/whatsapp');
 const logger = require('../config/logger');
 const { formatTemplateHour } = require('../utils/datetime');
+const { checkUsageLimit } = require('../middleware/checkUsage');
 
 function hasReminderConfig(tenant) {
   const businessName = String(tenant?.business_name || '').trim();
@@ -23,6 +24,12 @@ async function sendFollowUp({ appointmentId }) {
 
   if (appointment.tenant?.messaging_enabled !== true) {
     logger.info({ appointmentId }, 'Skipping follow-up, messaging disabled');
+    return;
+  }
+
+  const usageCheck = await checkUsageLimit(appointment.tenant_id);
+  if (!usageCheck.allowed) {
+    logger.warn({ appointmentId, reason: usageCheck.reason }, 'Skipping follow-up, usage limit reached');
     return;
   }
 

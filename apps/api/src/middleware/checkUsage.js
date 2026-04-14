@@ -8,10 +8,9 @@ const logger = require('../config/logger');
  */
 async function checkUsageLimit(tenantId) {
   try {
-    // Get tenant and subscription data
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('trial_ends_at, messages_sent_this_month, created_at')
+      .select('messages_sent_this_month')
       .eq('id', tenantId)
       .single();
 
@@ -22,7 +21,7 @@ async function checkUsageLimit(tenantId) {
 
     const { data: subscription, error: subError } = await supabase
       .from('subscriptions')
-      .select('plan, status')
+      .select('plan, status, current_period_end')
       .eq('tenant_id', tenantId)
       .single();
 
@@ -32,8 +31,11 @@ async function checkUsageLimit(tenantId) {
     }
 
     const now = new Date();
-    const trialEndsAt = tenant.trial_ends_at ? new Date(tenant.trial_ends_at) : null;
-    const isInTrial = trialEndsAt && trialEndsAt > now;
+    const trialEndsAt = subscription.plan === 'trial' && subscription.current_period_end
+      ? new Date(subscription.current_period_end)
+      : null;
+    // NULL current_period_end on trial = no expiry set yet, treat as active
+    const isInTrial = subscription.plan === 'trial' && (!trialEndsAt || trialEndsAt > now);
 
     // 1. Check if trial is active - allow unlimited messages during trial
     if (isInTrial) {
@@ -42,10 +44,10 @@ async function checkUsageLimit(tenantId) {
     }
 
     // 2. Check if trial expired but no paid subscription
-    if (trialEndsAt && trialEndsAt <= now && ['trial', 'trial_expired'].includes(subscription.plan)) {
+    if (subscription.plan === 'trial' && trialEndsAt && trialEndsAt <= now) {
       logger.warn({ tenantId, trialEndsAt }, '[Usage] Trial expired, no paid subscription');
-      return { 
-        allowed: false, 
+      return {
+        allowed: false,
         reason: 'trial_expired',
         message: 'Tu período de prueba ha finalizado. Por favor, selecciona un plan para continuar usando AutoAgenda.'
       };
@@ -120,41 +122,6 @@ async function checkUsageLimit(tenantId) {
   }
 }
 
-/**
- * Express middleware wrapper for usage checking
- * Use in routes that will trigger message sending
- */
-async function usageLimitMiddleware(req, res, next) {
-  try {
-    const tenantId = req.tenantId; // Set by auth middleware
-
-    if (!tenantId) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    const check = await checkUsageLimit(tenantId);
-
-    if (!check.allowed) {
-      return res.status(402).json({ 
-        error: 'Usage limit exceeded',
-        message: check.message,
-        reason: check.reason,
-        current: check.current,
-        limit: check.limit
-      });
-    }
-
-    // Attach usage info to request for logging
-    req.usageCheck = check;
-    next();
-  } catch (error) {
-    logger.error({ error: error.message }, '[Usage Middleware] Error');
-    // Allow request to proceed on error
-    next();
-  }
-}
-
 module.exports = {
   checkUsageLimit,
-  usageLimitMiddleware,
 };

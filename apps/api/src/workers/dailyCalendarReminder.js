@@ -6,6 +6,8 @@ const { getValidToken } = require('../controllers/calendar.controller');
 const logger = require('../config/logger');
 const { formatTemplateHour } = require('../utils/datetime');
 const { appointmentsQueue } = require('./queue');
+const { trackMessageSent } = require('./usageTracking');
+const { checkUsageLimit } = require('../middleware/checkUsage');
 const { JobName } = require('@autoagenda/shared');
 
 function hasReminderConfig(tenant) {
@@ -171,6 +173,18 @@ async function runDailyReminders() {
     };
 
     try {
+      const usageCheck = await checkUsageLimit(appt.tenant_id);
+      if (!usageCheck.allowed) {
+        logger.warn({
+          appointmentId: appt.id,
+          tenantId: appt.tenant_id,
+          reason: usageCheck.reason,
+          current: usageCheck.current,
+          limit: usageCheck.limit,
+        }, 'Skipping daily reminder, usage limit reached');
+        continue;
+      }
+
       // Final GCal check just before sending: catch cancellations that happened
       // after syncGCalDates ran at the top of this cron tick.
       if (appt.google_event_id) {
@@ -228,6 +242,8 @@ async function runDailyReminders() {
       }, tenantConfig);
 
       const waMessageId = whatsappResponse?.messages?.[0]?.id || null;
+
+      await trackMessageSent(appt.tenant_id, 'reminder');
 
       await supabase.from('message_logs').insert({
         tenant_id: appt.tenant_id,

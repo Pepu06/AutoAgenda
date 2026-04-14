@@ -3,6 +3,8 @@ const logger = require('../config/logger');
 const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor, createCalendarEvent, listCalendars } = require('../services/google');
 const { sendTemplate } = require('../services/whatsapp');
 const { appointmentsQueue } = require('../workers/queue');
+const { trackMessageSent } = require('../workers/usageTracking');
+const { checkUsageLimit } = require('../middleware/checkUsage');
 const { JobName } = require('@autoagenda/shared');
 const { AppError, ValidationError } = require('../errors');
 const { formatTime, formatTemplateHour } = require('../utils/datetime');
@@ -473,6 +475,11 @@ async function remindEvent(req, res, next) {
     const phone = extractDataFromDescription(event.description || '').phone;
     if (!phone) throw new AppError('No se encontró número de teléfono entre [ ] en la descripción del evento', 400);
 
+    const usageCheck = await checkUsageLimit(req.tenantId);
+    if (!usageCheck.allowed) {
+      throw new AppError(usageCheck.message || 'Límite de mensajes alcanzado para tu plan actual.', 403);
+    }
+
     const start = event.start?.dateTime || (event.start?.date ? `${event.start.date}T12:00:00` : null);
 
     let clientName = null;
@@ -543,6 +550,8 @@ async function remindEvent(req, res, next) {
         ],
       } : {}),
     }, tenantConfig);
+
+    await trackMessageSent(req.tenantId, 'reminder');
 
     if (appointment?.id) {
       const { error: updateError } = await supabase

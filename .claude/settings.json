@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs kill:*)"
+      "Bash(xargs kill:*)",
+      "Bash(curl -s http://localhost:3001/api/subscription/plans)",
+      "Bash(curl -s http://localhost:3001/subscription/plans)",
+      "Bash(npm test:*)"
     ]
   }
 }

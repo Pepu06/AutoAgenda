@@ -1,5 +1,6 @@
 const { supabase } = require('@autoagenda/db');
 const { createSubscription, cancelSubscription, getPlanConfig, PLANS } = require('../services/mercadopago');
+const { getUserTenants } = require('../middleware/tenantAuth');
 const { AppError, NotFoundError, ValidationError } = require('../errors');
 const logger = require('../config/logger');
 
@@ -9,7 +10,7 @@ const logger = require('../config/logger');
  */
 async function getSubscription(req, res, next) {
   try {
-    const { data: subscription, error } = await supabase
+    let { data: subscription, error } = await supabase
       .from('subscriptions')
       .select('*')
       .eq('tenant_id', req.tenantId)
@@ -17,21 +18,45 @@ async function getSubscription(req, res, next) {
 
     if (error) throw error;
 
-    if (!subscription) {
-      throw new NotFoundError('No subscription found for this tenant');
-    }
-
-    // Get tenant to check trial status
+    // Get tenant for message usage count
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('trial_ends_at, messages_sent_this_month, created_at')
+      .select('messages_sent_this_month')
       .eq('id', req.tenantId)
       .single();
 
+    // No subscription row yet → create trial row
+    if (!subscription) {
+      const now = new Date();
+      const trialEndsAt = tenant?.trial_ends_at
+        ? new Date(tenant.trial_ends_at)
+        : new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+
+      const { data: created, error: createError } = await supabase
+        .from('subscriptions')
+        .insert({
+          id: crypto.randomUUID(),
+          tenant_id: req.tenantId,
+          plan: 'trial',
+          status: 'active',
+          current_period_start: now.toISOString(),
+          current_period_end: trialEndsAt.toISOString(),
+          cancel_at_period_end: false,
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+      subscription = created;
+    }
+
     const planConfig = getPlanConfig(subscription.plan);
     const now = new Date();
-    const trialEndsAt = tenant?.trial_ends_at ? new Date(tenant.trial_ends_at) : null;
-    const isInTrial = trialEndsAt && trialEndsAt > now;
+    const trialEndsAt = subscription.plan === 'trial' && subscription.current_period_end
+      ? new Date(subscription.current_period_end)
+      : null;
+    // NULL current_period_end on trial = no expiry set yet, treat as active
+    const isInTrial = subscription.plan === 'trial' && (!trialEndsAt || trialEndsAt > now);
     const trialDaysLeft = isInTrial ? Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24)) : 0;
 
     res.json({
@@ -241,9 +266,23 @@ function getFeaturesByPlan(plan) {
   return features[plan] || [];
 }
 
+/**
+ * GET /api/subscription/user-tenants
+ * Get all tenants accessible by the authenticated user
+ */
+async function getUserTenantsController(req, res, next) {
+  try {
+    const tenants = await getUserTenants(req.userId);
+    res.json(tenants);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getSubscription,
   createCheckout,
   cancelSubcription,
   getPlans,
+  getUserTenantsController,
 };

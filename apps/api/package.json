@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "test": "node ../../node_modules/.bin/jest --testPathPatterns=src/__tests__ --no-coverage"
   },
   "dependencies": {
     "@autoagenda/db": "*",
@@ -27,5 +28,8 @@
     "pino-pretty": "^11.2.1",
     "resend": "^6.10.0",
     "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "jest": "^30.3.0"
   }
 }

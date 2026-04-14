@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { api } from '../../../lib/api';
 import s from './upgrade.module.css';
 
@@ -45,16 +44,30 @@ export default function UpgradePage() {
 }
 
 function PlanCard({ plan, featured }) {
-  const [showPayment, setShowPayment] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const reminders = plan.messageLimit == null ? 'Ilimitados' : plan.messageLimit.toLocaleString('es-AR');
 
-  function handleSelectPlan() {
+  async function handleSelectPlan() {
     if (plan.contactRequired) {
       window.location.href = 'mailto:hola@autoagenda.app?subject=Plan Custom';
       return;
     }
-    setShowPayment(true);
+
+    setLoading(true);
+    setError('');
+    try {
+      const data = await api.post('/subscription/checkout', { plan: plan.id });
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        setError('No se recibió la URL de pago. Intentá de nuevo.');
+      }
+    } catch (err) {
+      setError(err.message || 'Error al procesar tu solicitud');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -85,44 +98,13 @@ function PlanCard({ plan, featured }) {
 
       {error && <div className={s.error}>{error}</div>}
 
-      {!showPayment ? (
-        <button
-          className={plan.contactRequired ? s.btnSecondary : s.btnPrimary}
-          onClick={handleSelectPlan}
-        >
-          {plan.contactRequired ? 'Contactar →' : 'Seleccionar plan →'}
-        </button>
-      ) : (
-        <>
-          <div className={s.paymentInfo}>
-            <div className={s.paymentTitle}>💳 Datos para transferencia:</div>
-            <div className={s.paymentData}>
-              <div className={s.paymentRow}>
-                <span className={s.paymentLabel}>Alias:</span>
-                <span className={s.paymentValue}>pedrogsoro</span>
-              </div>
-              <div className={s.paymentRow}>
-                <span className={s.paymentLabel}>CBU:</span>
-                <span className={s.paymentValue}>0000003100096112065785</span>
-              </div>
-              <div className={s.paymentRow}>
-                <span className={s.paymentLabel}>Monto:</span>
-                <span className={s.paymentValue}>${plan.price.toLocaleString('es-AR')} ARS</span>
-              </div>
-            </div>
-            <div className={s.paymentNote}>
-              Transferí el monto exacto y luego subí tu comprobante en la sección de Facturación.
-            </div>
-          </div>
-          <Link
-            href={`/billing/upload-proof?plan=${encodeURIComponent(plan.id)}`}
-            className={s.btnPrimary}
-            style={{ marginTop: 12, textDecoration: 'none' }}
-          >
-            Ir a subir comprobante →
-          </Link>
-        </>
-      )}
+      <button
+        className={plan.contactRequired ? s.btnSecondary : s.btnPrimary}
+        onClick={handleSelectPlan}
+        disabled={loading}
+      >
+        {loading ? 'Redirigiendo...' : plan.contactRequired ? 'Contactar →' : 'Seleccionar plan →'}
+      </button>
     </div>
   );
 }

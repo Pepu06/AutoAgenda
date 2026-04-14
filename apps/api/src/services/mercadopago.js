@@ -23,12 +23,13 @@ const PLANS = {
   inicial: {
     name: 'Plan de 100 citas al mes',
     subtitle: 'Ideal para profesionales independientes',
-    price: 25000, 
+    price: 25000,
     messageLimit: 100,
     calendarsLimit: 1,
     currency: 'ARS',
     description: '1 agenda de Google Calendar, 100 recordatorios de WhatsApp al mes',
     valueProposition: 'Con un solo turno recuperado al mes, el plan se paga solo.',
+    mpPlanId: 'cdc4ff38174c4a4ca96f285db153f2a0',
   },
   profesional: {
     name: 'Plan de 200 citas al mes',
@@ -39,11 +40,12 @@ const PLANS = {
     currency: 'ARS',
     description: '200 recordatorios de WhatsApp al mes, soporte técnico',
     valueProposition: 'Más volumen mensual con mejor costo por cita.',
+    mpPlanId: 'a96dc488a9164d43b5f54b5454881025',
   },
   custom: {
     name: 'Plan de 300 citas al mes',
     subtitle: 'Para alto volumen de turnos',
-    price: 50000, 
+    price: 50000,
     messageLimit: 300,
     calendarsLimit: 5,
     currency: 'ARS',
@@ -51,6 +53,7 @@ const PLANS = {
     customPricing: false,
     contactRequired: false,
     valueProposition: 'El mejor valor para equipos con agenda intensa.',
+    mpPlanId: 'a7c481d3cb6e4118836dd5fd7bd838e3',
   },
 };
 
@@ -71,26 +74,38 @@ async function createSubscription(tenantId, plan, payer) {
   const notificationUrl = `${env.BASE_URL}/api/webhooks/mercadopago`;
 
   try {
-    // Create pre-approval (subscription) in Mercado Pago
-    const preApproval = await preApprovalApi.create({
-      body: {
+    let preApproval;
+
+    if (planConfig.mpPlanId) {
+      // Pre-created plan: redirect to MP public checkout URL directly.
+      // MP requires card_token_id to create preapprovals programmatically with preapproval_plan_id,
+      // so we skip preapproval creation and send the user to the plan's checkout page.
+      const checkoutUrl = `https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=${planConfig.mpPlanId}`;
+      logger.info({ tenantId, plan }, 'Redirecting to MP plan checkout');
+      return {
+        subscriptionId: null,
+        initPoint: checkoutUrl,
+        sandboxInitPoint: checkoutUrl,
+        status: 'pending',
+      };
+    }
+
+    {
+      const subscriptionBody = {
         reason: `AutoAgenda - ${planConfig.name}`,
         auto_recurring: {
           frequency: 1,
           frequency_type: 'months',
           transaction_amount: planConfig.price,
           currency_id: planConfig.currency,
-          free_trial: {
-            frequency: 0,
-            frequency_type: 'months',
-          },
         },
         back_url: backUrl,
         payer_email: payer.email,
         external_reference: tenantId,
         status: 'pending',
-      },
-    });
+      };
+      preApproval = await preApprovalApi.create({ body: subscriptionBody });
+    }
 
     logger.info({ tenantId, plan, mpSubscriptionId: preApproval.id }, 'Mercado Pago subscription created');
 

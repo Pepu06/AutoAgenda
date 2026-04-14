@@ -25,7 +25,6 @@ const MessageDirection = Object.freeze({
 
 const JobName = Object.freeze({
   SEND_CONFIRMATION: 'sendConfirmation',
-  SEND_REMINDER: 'sendReminder',
   SEND_FOLLOW_UP: 'sendFollowUp',
 });
 
