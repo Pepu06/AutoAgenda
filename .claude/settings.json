@@ -4,7 +4,16 @@
       "Bash(xargs kill:*)",
       "Bash(curl -s http://localhost:3001/api/subscription/plans)",
       "Bash(curl -s http://localhost:3001/subscription/plans)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "WebFetch(domain:developers.facebook.com)",
+      "Read(//Users/pedro/.config/ngrok/**)",
+      "Read(//Users/pedro/.ngrok2/**)",
+      "Read(//Users/pedro/**)",
+      "Bash(ngrok config:*)",
+      "Bash(curl -s http://127.0.0.1:4040/api/tunnels)"
+    ],
+    "additionalDirectories": [
+      "/Users/pedro/Library/Application Support/ngrok"
     ]
   }
 }
