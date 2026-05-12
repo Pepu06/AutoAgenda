@@ -28,8 +28,11 @@ export default function EditAppointmentModal({ event, onSaved, onClose }) {
   const [error, setError]       = useState('');
 
   const initial = isoToArgentina(event.start);
-  const [schedDate, setSchedDate] = useState(initial.date);
-  const [schedTime, setSchedTime] = useState(initial.time);
+  const [schedDay,  setSchedDay]  = useState(initial.date.split('-')[2]);
+  const [schedMonth,setSchedMonth]= useState(initial.date.split('-')[1]);
+  const [schedYear, setSchedYear] = useState(initial.date.split('-')[0]);
+  const [schedHour, setSchedHour] = useState(initial.time.split(':')[0]);
+  const [schedMin,  setSchedMin]  = useState(initial.time.split(':')[1]);
   const [contactId, setContactId]     = useState('');
   const [serviceId, setServiceId]     = useState('');
   const [notes, setNotes]             = useState('');
@@ -63,12 +66,13 @@ export default function EditAppointmentModal({ event, onSaved, onClose }) {
   }, [event.appointmentId]);
 
   async function handleSave() {
-    if (!schedDate || !schedTime) { setError('La fecha y hora son requeridas.'); return; }
+    if (!schedDay || !schedMonth || !schedYear || !schedHour || !schedMin) { setError('La fecha y hora son requeridas.'); return; }
+    const schedDate = `${schedYear}-${schedMonth}-${schedDay}`;
     setError('');
     setSaving(true);
     try {
       await api.put(`/appointments/${event.appointmentId}`, {
-        scheduledAt: argentinaToIso(schedDate, schedTime),
+        scheduledAt: argentinaToIso(schedDate, `${schedHour}:${schedMin}`),
         contactId,
         serviceId,
         notes,
@@ -102,22 +106,38 @@ export default function EditAppointmentModal({ event, onSaved, onClose }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
               <label style={labelStyle}>Fecha</label>
-              <input
-                type="date"
-                value={schedDate}
-                onChange={e => setSchedDate(e.target.value)}
-                style={inputStyle}
-              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select value={schedDay} onChange={e => setSchedDay(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
+                  {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+                <select value={schedMonth} onChange={e => setSchedMonth(e.target.value)} style={{ ...selectStyle, flex: 2 }}>
+                  {['01','02','03','04','05','06','07','08','09','10','11','12'].map((m, i) => (
+                    <option key={m} value={m}>{['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][i]}</option>
+                  ))}
+                </select>
+                <select value={schedYear} onChange={e => setSchedYear(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
+                  {[2025, 2026, 2027, 2028].map(y => (
+                    <option key={y} value={String(y)}>{y}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <label style={labelStyle}>Hora</label>
-              <input
-                type="time"
-                lang="en-GB"
-                value={schedTime}
-                onChange={e => setSchedTime(e.target.value)}
-                style={inputStyle}
-              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select value={schedHour} onChange={e => setSchedHour(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
+                  {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+                <select value={schedMin} onChange={e => setSchedMin(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
+                  {[...new Set(['00','05','10','15','20','25','30','35','40','45','50','55', schedMin])].sort().map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div>

@@ -74,6 +74,11 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showCreate, setShowCreate]   = useState(false);
   const [createForm, setCreateForm]   = useState(EMPTY_CREATE);
+  const [createDay,   setCreateDay]   = useState('');
+  const [createMonth, setCreateMonth] = useState('');
+  const [createYear,  setCreateYear]  = useState('');
+  const [createHour,  setCreateHour]  = useState('09');
+  const [createMin,   setCreateMin]   = useState('00');
   const [creating, setCreating]       = useState(false);
   const [createError, setCreateError] = useState('');
   const [contacts, setContacts]       = useState([]);
@@ -164,7 +169,10 @@ export default function CalendarPage() {
     if (!contacts.length) setContacts(c.data || []);
     if (!services.length) setServices(s.data || []);
     setLocationMode(settings.data?.locationMode || 'fixed');
-    setCreateForm({ ...EMPTY_CREATE, scheduledAt: selectedDate ? `${selectedDate}T09:00` : '' });
+    setCreateForm(EMPTY_CREATE);
+    const parts = selectedDate ? selectedDate.split('-') : new Date().toISOString().slice(0,10).split('-');
+    setCreateYear(parts[0]); setCreateMonth(parts[1]); setCreateDay(parts[2]);
+    setCreateHour('09'); setCreateMin('00');
     setCreateError('');
     setShowCreate(true);
   }
@@ -174,7 +182,7 @@ export default function CalendarPage() {
     setCreating(true);
     setCreateError('');
     try {
-      const scheduledAt = createForm.scheduledAt ? createForm.scheduledAt + ':00-03:00' : createForm.scheduledAt;
+      const scheduledAt = `${createYear}-${createMonth}-${createDay}T${createHour}:${createMin}:00-03:00`;
       await api.post('/calendar/events', { ...createForm, scheduledAt });
       setShowCreate(false);
       setCreateForm(EMPTY_CREATE);
@@ -471,14 +479,34 @@ export default function CalendarPage() {
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Fecha y hora</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={createForm.scheduledAt}
-                  onChange={e => setCreateForm(f => ({ ...f, scheduledAt: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14 }}
-                />
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Fecha</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[
+                    { value: createDay,   setter: setCreateDay,   opts: Array.from({length:31},(_,i)=>String(i+1).padStart(2,'0')), flex: 1 },
+                    { value: createMonth, setter: setCreateMonth, opts: ['01','02','03','04','05','06','07','08','09','10','11','12'], labels: ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'], flex: 2 },
+                    { value: createYear,  setter: setCreateYear,  opts: ['2025','2026','2027','2028'], flex: 1 },
+                  ].map(({ value, setter, opts, labels, flex }, idx) => (
+                    <select key={idx} required value={value} onChange={e => setter(e.target.value)}
+                      style={{ flex, padding: '8px 6px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, appearance: 'none', WebkitAppearance: 'none' }}>
+                      <option value="">-</option>
+                      {opts.map((o, i) => <option key={o} value={o}>{labels ? labels[i] : o}</option>)}
+                    </select>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Hora</label>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <select value={createHour} onChange={e => setCreateHour(e.target.value)}
+                    style={{ flex: 1, padding: '8px 6px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, appearance: 'none', WebkitAppearance: 'none' }}>
+                    {Array.from({length:24},(_,i)=>String(i).padStart(2,'0')).map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                  <span style={{ color: 'var(--text-muted)' }}>:</span>
+                  <select value={createMin} onChange={e => setCreateMin(e.target.value)}
+                    style={{ flex: 1, padding: '8px 6px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13, appearance: 'none', WebkitAppearance: 'none' }}>
+                    {['00','05','10','15','20','25','30','35','40','45','50','55'].map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
               </div>
               {locationMode === 'calendar' && (
                 <div>

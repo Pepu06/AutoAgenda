@@ -126,7 +126,7 @@ async function update(req, res, next) {
           }
           if (updates.scheduled_at) {
             const start = new Date(updates.scheduled_at);
-            const durationMin = data.service?.duration ?? 60;
+            const durationMin = data.service?.duration_minutes ?? data.service?.duration ?? 60;
             const end = new Date(start.getTime() + durationMin * 60 * 1000);
             await updateCalendarEventDateTime(token, data.google_event_id, start.toISOString(), end.toISOString());
           }
