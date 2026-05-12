@@ -8,13 +8,15 @@ function isoToArgentina(isoString) {
   const argMs = d.getTime() + (-3 * 60 * 60 * 1000);
   const argDate = new Date(argMs);
   const pad = n => String(n).padStart(2, '0');
-  return `${argDate.getUTCFullYear()}-${pad(argDate.getUTCMonth() + 1)}-${pad(argDate.getUTCDate())}T${pad(argDate.getUTCHours())}:${pad(argDate.getUTCMinutes())}`;
+  return {
+    date: `${argDate.getUTCFullYear()}-${pad(argDate.getUTCMonth() + 1)}-${pad(argDate.getUTCDate())}`,
+    time: `${pad(argDate.getUTCHours())}:${pad(argDate.getUTCMinutes())}`,
+  };
 }
 
-function argentinaToIso(localString) {
-  const [datePart, timePart] = localString.split('T');
-  const [year, month, day] = datePart.split('-').map(Number);
-  const [hours, minutes] = timePart.split(':').map(Number);
+function argentinaToIso(date, time) {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
   return new Date(Date.UTC(year, month - 1, day, hours + 3, minutes)).toISOString();
 }
 
@@ -25,7 +27,9 @@ export default function EditAppointmentModal({ event, onSaved, onClose }) {
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState('');
 
-  const [scheduledAt, setScheduledAt] = useState(isoToArgentina(event.start));
+  const initial = isoToArgentina(event.start);
+  const [schedDate, setSchedDate] = useState(initial.date);
+  const [schedTime, setSchedTime] = useState(initial.time);
   const [contactId, setContactId]     = useState('');
   const [serviceId, setServiceId]     = useState('');
   const [notes, setNotes]             = useState('');
@@ -59,12 +63,12 @@ export default function EditAppointmentModal({ event, onSaved, onClose }) {
   }, [event.appointmentId]);
 
   async function handleSave() {
-    if (!scheduledAt) { setError('La fecha y hora son requeridas.'); return; }
+    if (!schedDate || !schedTime) { setError('La fecha y hora son requeridas.'); return; }
     setError('');
     setSaving(true);
     try {
       await api.put(`/appointments/${event.appointmentId}`, {
-        scheduledAt: argentinaToIso(scheduledAt),
+        scheduledAt: argentinaToIso(schedDate, schedTime),
         contactId,
         serviceId,
         notes,
@@ -97,11 +101,20 @@ export default function EditAppointmentModal({ event, onSaved, onClose }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <label style={labelStyle}>Fecha y hora</label>
+              <label style={labelStyle}>Fecha</label>
               <input
-                type="datetime-local"
-                value={scheduledAt}
-                onChange={e => setScheduledAt(e.target.value)}
+                type="date"
+                value={schedDate}
+                onChange={e => setSchedDate(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Hora</label>
+              <input
+                type="time"
+                value={schedTime}
+                onChange={e => setSchedTime(e.target.value)}
                 style={inputStyle}
               />
             </div>

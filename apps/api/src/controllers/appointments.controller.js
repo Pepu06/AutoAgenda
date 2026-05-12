@@ -107,7 +107,7 @@ async function update(req, res, next) {
       .from('appointments')
       .update(updates)
       .eq('id', req.params.id)
-      .select(`${APPOINTMENT_SELECT}, google_event_id, user:users(google_access_token, google_refresh_token)`)
+      .select(APPOINTMENT_SELECT)
       .single();
     if (error) throw error;
 
