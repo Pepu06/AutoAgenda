@@ -208,6 +208,21 @@ async function createCalendarEvent(accessToken, { summary, description, startDat
   return res.json();
 }
 
+async function updateCalendarEventDateTime(accessToken, eventId, startDateTime, endDateTime, calendarId = 'primary') {
+  const res = await fetch(`${CAL_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      start: { dateTime: startDateTime },
+      end:   { dateTime: endDateTime },
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(`Google Calendar PATCH failed (${res.status}): ${data?.error?.message || 'unknown error'}`);
+  }
+}
+
 async function listCalendars(accessToken) {
   const res = await fetch(`${CAL_BASE}/users/me/calendarList`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -231,6 +246,7 @@ module.exports = {
   getTodayCalendarEvents,
   updateEventColor,
   updateEventTitleAndColor,
+  updateCalendarEventDateTime,
   createCalendarEvent,
   listCalendars,
   createCalendarEventInCalendar,

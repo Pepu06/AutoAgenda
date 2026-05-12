@@ -2,7 +2,7 @@ const { supabase, convertKeys } = require('@autoagenda/db');
 const { AppError, NotFoundError } = require('../errors');
 const { appointmentsQueue } = require('../workers/queue');
 const { JobName } = require('@autoagenda/shared');
-const { updateEventColor, refreshAccessToken, getCalendarEvents } = require('../services/google');
+const { updateEventColor, updateCalendarEventDateTime, refreshAccessToken, getCalendarEvents } = require('../services/google');
 
 const APPOINTMENT_SELECT = '*, contact:contacts(*), service:services(*), user:users(*)';
 const REMINDER_CONFIG_ERROR = 'Completá Nombre del negocio y Mensaje personalizable en Configuración para poder crear citas y enviar recordatorios.';
@@ -111,8 +111,8 @@ async function update(req, res, next) {
       .single();
     if (error) throw error;
 
-    // Sync status color back to Google Calendar if linked
-    if (data.google_event_id && updates.status) {
+    // Sync changes to Google Calendar if event is linked
+    if (data.google_event_id && (updates.scheduled_at || updates.status)) {
       const u = data.user;
       let token = u?.google_access_token;
       if (token) {
@@ -121,7 +121,15 @@ async function update(req, res, next) {
           token = await refreshAccessToken(u.google_refresh_token);
           await supabase.from('users').update({ google_access_token: token }).eq('id', req.userId);
         }
-        updateEventColor(token, data.google_event_id, updates.status).catch(() => {});
+        if (updates.scheduled_at) {
+          const start = new Date(updates.scheduled_at);
+          const durationMin = data.service?.duration ?? 60;
+          const end = new Date(start.getTime() + durationMin * 60 * 1000);
+          updateCalendarEventDateTime(token, data.google_event_id, start.toISOString(), end.toISOString()).catch(() => {});
+        }
+        if (updates.status) {
+          updateEventColor(token, data.google_event_id, updates.status).catch(() => {});
+        }
       }
     }
 

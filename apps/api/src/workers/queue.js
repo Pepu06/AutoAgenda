@@ -11,7 +11,13 @@ if (!env.REDIS_URL) {
 const { Queue, Worker } = require('bullmq');
 const { JobName } = require('@autoagenda/shared');
 
-const connection = { url: env.REDIS_URL, maxRetriesPerRequest: null, lazyConnect: true };
+const connection = {
+  url: env.REDIS_URL,
+  maxRetriesPerRequest: null,
+  lazyConnect: true,
+  retryStrategy: (times) => Math.min(times * 100, 3000),
+  reconnectOnError: () => true,
+};
 
 const appointmentsQueue = new Queue('appointments', { connection });
 
