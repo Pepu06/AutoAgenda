@@ -1,5 +1,6 @@
 const { supabase, convertKeys } = require('@autoagenda/db');
 const { AppError, NotFoundError } = require('../errors');
+const logger = require('../config/logger');
 const { appointmentsQueue } = require('../workers/queue');
 const { JobName } = require('@autoagenda/shared');
 const { updateEventColor, updateCalendarEventDateTime, refreshAccessToken, getCalendarEvents } = require('../services/google');
@@ -111,26 +112,31 @@ async function update(req, res, next) {
       .single();
     if (error) throw error;
 
-    // Sync changes to Google Calendar if event is linked
+    // Sync changes to Google Calendar if event is linked (best-effort, never blocks response)
     if (data.google_event_id && (updates.scheduled_at || updates.status)) {
-      const u = data.user;
-      let token = u?.google_access_token;
-      if (token) {
-        const test = await getCalendarEvents(token, { days: 1 });
-        if (test === null && u.google_refresh_token) {
-          token = await refreshAccessToken(u.google_refresh_token);
-          await supabase.from('users').update({ google_access_token: token }).eq('id', req.userId);
+      (async () => {
+        try {
+          const u = data.user;
+          let token = u?.google_access_token;
+          if (!token) return;
+          const test = await getCalendarEvents(token, { days: 1 });
+          if (test === null && u.google_refresh_token) {
+            token = await refreshAccessToken(u.google_refresh_token);
+            await supabase.from('users').update({ google_access_token: token }).eq('id', req.userId);
+          }
+          if (updates.scheduled_at) {
+            const start = new Date(updates.scheduled_at);
+            const durationMin = data.service?.duration ?? 60;
+            const end = new Date(start.getTime() + durationMin * 60 * 1000);
+            await updateCalendarEventDateTime(token, data.google_event_id, start.toISOString(), end.toISOString());
+          }
+          if (updates.status) {
+            await updateEventColor(token, data.google_event_id, updates.status);
+          }
+        } catch (e) {
+          logger.warn({ err: e }, '[GCal] Failed to sync appointment update');
         }
-        if (updates.scheduled_at) {
-          const start = new Date(updates.scheduled_at);
-          const durationMin = data.service?.duration ?? 60;
-          const end = new Date(start.getTime() + durationMin * 60 * 1000);
-          updateCalendarEventDateTime(token, data.google_event_id, start.toISOString(), end.toISOString()).catch(() => {});
-        }
-        if (updates.status) {
-          updateEventColor(token, data.google_event_id, updates.status).catch(() => {});
-        }
-      }
+      })();
     }
 
     return res.json({ success: true, data: convertKeys(data) });

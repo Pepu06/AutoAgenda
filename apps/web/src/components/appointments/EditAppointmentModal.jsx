@@ -113,6 +113,7 @@ export default function EditAppointmentModal({ event, onSaved, onClose }) {
               <label style={labelStyle}>Hora</label>
               <input
                 type="time"
+                lang="en-GB"
                 value={schedTime}
                 onChange={e => setSchedTime(e.target.value)}
                 style={inputStyle}
