@@ -71,7 +71,7 @@ export default function EditAppointmentModal({ event, onSaved, onClose }) {
     setError('');
     setSaving(true);
     try {
-      await api.put(`/appointments/${event.appointmentId}`, {
+      await api.put(`/calendar/events/${event.id}`, {
         scheduledAt: argentinaToIso(schedDate, `${schedHour}:${schedMin}`),
         contactId,
         serviceId,

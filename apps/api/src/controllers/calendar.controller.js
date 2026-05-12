@@ -637,4 +637,49 @@ async function createEvent(req, res, next) {
 }
 
 
-module.exports = { calendarStatus, connect, disconnect, events, createEvent, updateEventStatus, remindEvent, getDefaultCalendar, setDefaultCalendar, getValidToken, getOwnerCalendarId };
+async function updateCalendarEvent(req, res, next) {
+  try {
+    const { eventId } = req.params;
+    const { scheduledAt, contactId, serviceId, notes } = req.body;
+
+    const accessToken = await getValidToken(req.userId);
+    if (!accessToken) throw new AppError('Google Calendar no conectado', 400);
+
+    const defaultCalendarId = await getOwnerCalendarId(req.tenantId);
+
+    // Get service duration to compute end time
+    let durationMinutes = 60;
+    if (serviceId) {
+      const { data: svc } = await supabase
+        .from('services').select('duration_minutes, name').eq('id', serviceId).eq('tenant_id', req.tenantId).maybeSingle();
+      if (svc?.duration_minutes) durationMinutes = svc.duration_minutes;
+    }
+
+    // Update GCal event time
+    if (scheduledAt) {
+      const start = new Date(scheduledAt);
+      const end = new Date(start.getTime() + durationMinutes * 60000);
+      const { updateCalendarEventDateTime } = require('../services/google');
+      await updateCalendarEventDateTime(accessToken, eventId, start.toISOString(), end.toISOString(), defaultCalendarId);
+    }
+
+    // Update Supabase appointment
+    const updates = {};
+    if (scheduledAt)   updates.scheduled_at = new Date(scheduledAt).toISOString();
+    if (contactId)     updates.contact_id   = contactId;
+    if (serviceId)     updates.service_id   = serviceId;
+    if (notes !== undefined) updates.notes  = notes;
+
+    if (Object.keys(updates).length) {
+      await supabase
+        .from('appointments')
+        .update(updates)
+        .eq('google_event_id', eventId)
+        .eq('tenant_id', req.tenantId);
+    }
+
+    return res.json({ success: true });
+  } catch (err) { return next(err); }
+}
+
+module.exports = { calendarStatus, connect, disconnect, events, createEvent, updateEventStatus, remindEvent, getDefaultCalendar, setDefaultCalendar, updateCalendarEvent, getValidToken, getOwnerCalendarId };
