@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../../lib/api';
 import styles from './appointments.module.css';
 import tableStyles from '../../../components/appointments/AppointmentTable.module.css';
+import EditAppointmentModal from '../../../components/appointments/EditAppointmentModal';
 
 const STATUS_FALLBACK = { label: 'Sin enviar', color: 'var(--text-3)', bg: 'var(--surface-3)' };
 
@@ -21,6 +22,7 @@ export default function AppointmentsPage() {
   const [connected, setConnected]   = useState(true);
   const [filterDate, setFilterDate] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [editingEvent, setEditingEvent] = useState(null);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -98,7 +100,7 @@ export default function AppointmentsPage() {
                 <th>Teléfono</th>
                 <th>Fecha y hora</th>
                 <th>Estado</th>
-                <th>Cambiar estado</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -120,6 +122,7 @@ export default function AppointmentsPage() {
                         timeZone: 'America/Argentina/Buenos_Aires',
                         dateStyle: 'medium',
                         timeStyle: 'short',
+                        hour12: false,
                       })}
                       {e.isAllDay && <span style={{ color: 'var(--text-3)', fontSize: 11, marginLeft: 6 }}>Todo el día</span>}
                     </td>
@@ -129,17 +132,28 @@ export default function AppointmentsPage() {
                       </span>
                     </td>
                     <td>
-                      <select
-                        value={e.status ?? ''}
-                        onChange={ev => handleStatusChange(e.id, ev.target.value)}
-                        className={tableStyles.select}
-                      >
-                        <option value="sin_enviar">Sin enviar</option>
-                        <option value="notified">Notificado</option>
-                        <option value="pending">Pendiente</option>
-                        <option value="confirmed">Confirmado</option>
-                        <option value="cancelled">Cancelado</option>
-                      </select>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <select
+                          value={e.status ?? ''}
+                          onChange={ev => handleStatusChange(e.id, ev.target.value)}
+                          className={tableStyles.select}
+                        >
+                          <option value="sin_enviar">Sin enviar</option>
+                          <option value="notified">Notificado</option>
+                          <option value="pending">Pendiente</option>
+                          <option value="confirmed">Confirmado</option>
+                          <option value="cancelled">Cancelado</option>
+                        </select>
+                        {e.appointmentId && (
+                          <button
+                            onClick={() => setEditingEvent(e)}
+                            style={editBtnStyle}
+                            title="Editar cita"
+                          >
+                            Editar
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -148,6 +162,28 @@ export default function AppointmentsPage() {
           </table>
         </div>
       )}
+
+      {editingEvent && (
+        <EditAppointmentModal
+          event={editingEvent}
+          onSaved={() => { setEditingEvent(null); fetchEvents(); }}
+          onClose={() => setEditingEvent(null)}
+        />
+      )}
     </div>
   );
 }
+
+const editBtnStyle = {
+  padding: '6px 14px',
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border)',
+  borderRadius: 100,
+  fontSize: 12,
+  fontWeight: 600,
+  color: 'var(--text-2)',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  whiteSpace: 'nowrap',
+  transition: 'border-color 0.15s, color 0.15s',
+};

@@ -37,7 +37,7 @@ function formatTime(dateStr) {
   if (!dateStr) return '';
   return new Date(dateStr).toLocaleTimeString('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
-    hour: '2-digit', minute: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
   });
 }
 

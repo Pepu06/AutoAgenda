@@ -17,9 +17,7 @@ const HOURS = Array.from({ length: 48 }, (_, i) => {
   const h = Math.floor(i / 2);
   const m = i % 2 === 0 ? '00' : '30';
   const pad = String(h).padStart(2, '0');
-  const ampm = h < 12 ? 'AM' : 'PM';
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return { value: `${pad}:${m}`, label: `${h12}:${m} ${ampm}` };
+  return { value: `${pad}:${m}`, label: `${pad}:${m}` };
 });
 
 function makeEmptyDays() {

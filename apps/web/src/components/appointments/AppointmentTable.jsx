@@ -40,6 +40,7 @@ export default function AppointmentTable({ appointments, onStatusChange }) {
                   {new Date(a.scheduledAt).toLocaleString('es-AR', {
                     dateStyle: 'medium',
                     timeStyle: 'short',
+                    hour12: false,
                   })}
                 </td>
                 <td>

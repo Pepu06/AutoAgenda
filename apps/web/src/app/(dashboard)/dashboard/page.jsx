@@ -144,7 +144,7 @@ function EventList({ events, emptyText, timezone, showDate }) {
       {events.map(e => {
         const s = STATUS_CONFIG[e.status] ?? STATUS_FALLBACK;
         const dateObj = new Date(e.scheduledAt);
-        const time = dateObj.toLocaleTimeString('es-AR', { timeZone: timezone, hour: '2-digit', minute: '2-digit' });
+        const time = dateObj.toLocaleTimeString('es-AR', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false });
         const dateLabel = showDate ? dateObj.toLocaleDateString('es-AR', {
           timeZone: timezone, weekday: 'short', day: 'numeric', month: 'short',
         }) : null;
