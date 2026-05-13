@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { api } from '../../../lib/api';
 import styles from './calendar.module.css';
+import ContactSearch from '../../../components/ContactSearch';
 
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -456,15 +457,12 @@ export default function CalendarPage() {
             <form onSubmit={handleCreateEvent} className={styles.popupBody} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Contacto</label>
-                <select
-                  required
+                <ContactSearch
+                  contacts={contacts}
                   value={createForm.contactId}
-                  onChange={e => setCreateForm(f => ({ ...f, contactId: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 32px 8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14, appearance: 'none', WebkitAppearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238b8fa8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}
-                >
-                  <option value="">Seleccionar contacto...</option>
-                  {contacts.map(c => <option key={c.id} value={c.id}>{c.name} — {c.phone}</option>)}
-                </select>
+                  onChange={id => setCreateForm(f => ({ ...f, contactId: id }))}
+                  required
+                />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Servicio</label>
