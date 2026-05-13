@@ -21,10 +21,11 @@ function argentinaToIso(date, time) {
 }
 
 function ContactSearch({ contacts, value, onChange }) {
-  const selected = contacts.find(c => c.id === value);
-  const [query, setQuery] = useState(selected ? `${selected.name} — ${selected.phone}` : '');
+  const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+
+  const selected = contacts.find(c => c.id === value);
 
   const filtered = query
     ? contacts.filter(c =>
@@ -35,21 +36,18 @@ function ContactSearch({ contacts, value, onChange }) {
 
   useEffect(() => {
     function handleClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setQuery('');
+      }
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  useEffect(() => {
-    const s = contacts.find(c => c.id === value);
-    if (s) setQuery(`${s.name} — ${s.phone}`);
-  }, [value, contacts]);
-
-  function handleSelect(c) {
-    onChange(c.id);
-    setQuery(`${c.name} — ${c.phone}`);
-    setOpen(false);
+  function handleFocus() {
+    setQuery('');
+    setOpen(true);
   }
 
   function handleInput(e) {
@@ -58,38 +56,40 @@ function ContactSearch({ contacts, value, onChange }) {
     if (!e.target.value) onChange('');
   }
 
+  function handleSelect(c) {
+    onChange(c.id);
+    setQuery('');
+    setOpen(false);
+  }
+
+  const displayValue = open ? query : (selected ? `${selected.name} — ${selected.phone}` : '');
+
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <input
-        value={query}
+        value={displayValue}
         onChange={handleInput}
-        onFocus={() => setOpen(true)}
+        onFocus={handleFocus}
         placeholder="Buscar contacto..."
         style={inputStyle}
         autoComplete="off"
       />
-      {open && filtered.length > 0 && (
+      {open && (
         <div style={dropdownStyle}>
-          {filtered.map(c => (
+          {filtered.length === 0 ? (
+            <div style={{ ...dropdownItemStyle, color: 'var(--text-3)' }}>Sin resultados</div>
+          ) : filtered.map(c => (
             <div
               key={c.id}
               onMouseDown={() => handleSelect(c)}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = c.id === value ? 'var(--surface-3)' : ''; }}
-              style={{
-                ...dropdownItemStyle,
-                background: c.id === value ? 'var(--surface-3)' : undefined,
-              }}
+              style={{ ...dropdownItemStyle, background: c.id === value ? 'var(--surface-3)' : undefined }}
             >
               <span style={{ fontWeight: 600, color: 'var(--text)' }}>{c.name}</span>
               <span style={{ color: 'var(--text-3)', fontSize: 12, marginLeft: 6 }}>{c.phone}</span>
             </div>
           ))}
-        </div>
-      )}
-      {open && filtered.length === 0 && (
-        <div style={dropdownStyle}>
-          <div style={{ ...dropdownItemStyle, color: 'var(--text-3)' }}>Sin resultados</div>
         </div>
       )}
     </div>
