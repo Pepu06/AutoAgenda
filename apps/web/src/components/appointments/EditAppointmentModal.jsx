@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../../lib/api';
 
 function isoToArgentina(isoString) {
@@ -18,6 +18,82 @@ function argentinaToIso(date, time) {
   const [year, month, day] = date.split('-').map(Number);
   const [hours, minutes] = time.split(':').map(Number);
   return new Date(Date.UTC(year, month - 1, day, hours + 3, minutes)).toISOString();
+}
+
+function ContactSearch({ contacts, value, onChange }) {
+  const selected = contacts.find(c => c.id === value);
+  const [query, setQuery] = useState(selected ? `${selected.name} — ${selected.phone}` : '');
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  const filtered = query
+    ? contacts.filter(c =>
+        c.name.toLowerCase().includes(query.toLowerCase()) ||
+        c.phone.includes(query)
+      )
+    : contacts;
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  useEffect(() => {
+    const s = contacts.find(c => c.id === value);
+    if (s) setQuery(`${s.name} — ${s.phone}`);
+  }, [value, contacts]);
+
+  function handleSelect(c) {
+    onChange(c.id);
+    setQuery(`${c.name} — ${c.phone}`);
+    setOpen(false);
+  }
+
+  function handleInput(e) {
+    setQuery(e.target.value);
+    setOpen(true);
+    if (!e.target.value) onChange('');
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <input
+        value={query}
+        onChange={handleInput}
+        onFocus={() => setOpen(true)}
+        placeholder="Buscar contacto..."
+        style={inputStyle}
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <div style={dropdownStyle}>
+          {filtered.map(c => (
+            <div
+              key={c.id}
+              onMouseDown={() => handleSelect(c)}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = c.id === value ? 'var(--surface-3)' : ''; }}
+              style={{
+                ...dropdownItemStyle,
+                background: c.id === value ? 'var(--surface-3)' : undefined,
+              }}
+            >
+              <span style={{ fontWeight: 600, color: 'var(--text)' }}>{c.name}</span>
+              <span style={{ color: 'var(--text-3)', fontSize: 12, marginLeft: 6 }}>{c.phone}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {open && filtered.length === 0 && (
+        <div style={dropdownStyle}>
+          <div style={{ ...dropdownItemStyle, color: 'var(--text-3)' }}>Sin resultados</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function EditAppointmentModal({ event, onSaved, onClose }) {
@@ -142,11 +218,7 @@ export default function EditAppointmentModal({ event, onSaved, onClose }) {
 
             <div>
               <label style={labelStyle}>Contacto</label>
-              <select value={contactId} onChange={e => setContactId(e.target.value)} style={selectStyle}>
-                {contacts.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} — {c.phone}</option>
-                ))}
-              </select>
+              <ContactSearch contacts={contacts} value={contactId} onChange={setContactId} />
             </div>
 
             <div>
@@ -235,4 +307,16 @@ const secondaryBtn = {
   padding: '10px 20px', background: 'none', border: '1px solid var(--border)',
   color: 'var(--text-2)', borderRadius: 100, fontWeight: 600, fontSize: 13,
   cursor: 'pointer', fontFamily: 'inherit',
+};
+
+const dropdownStyle = {
+  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+  background: 'var(--surface)', border: '1px solid var(--border)',
+  borderRadius: 8, marginTop: 4, maxHeight: 220, overflowY: 'auto',
+  boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+};
+
+const dropdownItemStyle = {
+  padding: '9px 14px', cursor: 'pointer', fontSize: 13.5,
+  borderRadius: 6, transition: 'background 0.1s',
 };
