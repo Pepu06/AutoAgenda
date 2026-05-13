@@ -236,7 +236,7 @@ async function events(req, res, next) {
     const canCreateAppointments = hasReminderConfig(tenantSettings);
 
     const defaultCalendarId = await getOwnerCalendarId(req.tenantId);
-    const items = await getCalendarEvents(accessToken, defaultCalendarId, { days: 30 }) || [];
+    const items = await getCalendarEvents(accessToken, defaultCalendarId, { days: 365 }) || [];
 
     // Fetch DB appointments to use as authoritative status + transfer source
     const { data: synced } = await supabase

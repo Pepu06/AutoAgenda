@@ -67,7 +67,7 @@ async function getCalendarEvents(accessToken, calendarIdOrOpts = 'primary', opts
   const params = new URLSearchParams({
     singleEvents: 'true',
     orderBy:      'startTime',
-    maxResults:   '100',
+    maxResults:   '5000',
     timeMin,
     timeMax,
   });
