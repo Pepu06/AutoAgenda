@@ -185,6 +185,10 @@ export default function CalendarPage() {
   }
 
   async function openCreate() {
+    if (blockedDates[selectedDate]) {
+      alert('Este día está bloqueado. Desbloquealo antes de crear una cita.');
+      return;
+    }
     const promises = [
       contacts.length ? Promise.resolve({ data: contacts }) : api.get('/contacts'),
       services.length ? Promise.resolve({ data: services }) : api.get('/services'),
@@ -207,7 +211,12 @@ export default function CalendarPage() {
     setCreating(true);
     setCreateError('');
     try {
-      const scheduledAt = `${createYear}-${createMonth}-${createDay}T${createHour}:${createMin}:00-03:00`;
+      const dateStr = `${createYear}-${createMonth}-${createDay}`;
+      if (blockedDates[dateStr]) {
+        setCreateError('Este día está bloqueado. Elegí otra fecha.');
+        return;
+      }
+      const scheduledAt = `${dateStr}T${createHour}:${createMin}:00-03:00`;
       await api.post('/calendar/events', { ...createForm, scheduledAt });
       setShowCreate(false);
       setCreateForm(EMPTY_CREATE);

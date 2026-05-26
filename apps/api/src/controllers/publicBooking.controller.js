@@ -127,14 +127,16 @@ async function getAvailableSlots(req, res, next) {
       .gte('scheduled_at', rangeStart.toISOString())
       .lte('scheduled_at', rangeEnd.toISOString());
 
+    const mappedExceptions = (exceptions || []).map(e => ({
+      date: typeof e.date === 'string' ? e.date.slice(0, 10) : new Date(e.date).toISOString().slice(0, 10),
+      isBlocked: e.is_blocked,
+      startTime: e.start_time,
+      endTime: e.end_time,
+    }));
+
     const slots = computeAvailableSlots({
       rules: (rules || []).map(r => ({ dayOfWeek: r.day_of_week, startTime: r.start_time, endTime: r.end_time })),
-      exceptions: (exceptions || []).map(e => ({
-        date: typeof e.date === 'string' ? e.date.slice(0, 10) : new Date(e.date).toISOString().slice(0, 10),
-        isBlocked: e.is_blocked,
-        startTime: e.start_time,
-        endTime: e.end_time,
-      })),
+      exceptions: mappedExceptions,
       appointments: (appointments || []).map(a => ({
         scheduledAt: a.scheduled_at,
         durationMinutes: a.service?.duration_minutes || type.duration_minutes,
@@ -147,7 +149,13 @@ async function getAvailableSlots(req, res, next) {
       maxConcurrentBookings: type.max_concurrent_bookings || 1,
     });
 
-    return res.json({ success: true, data: { slots } });
+    const exception = mappedExceptions.find(e => e.date === from);
+    const blocked = from === to && !!exception?.isBlocked;
+    const blockedTimeRange = from === to && exception && !exception.isBlocked && exception.startTime
+      ? { startTime: exception.startTime.slice(0, 5), endTime: exception.endTime.slice(0, 5) }
+      : null;
+
+    return res.json({ success: true, data: { slots, blocked, blockedTimeRange } });
   } catch (err) { return next(err); }
 }
 

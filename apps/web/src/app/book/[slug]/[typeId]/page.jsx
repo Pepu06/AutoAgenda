@@ -44,9 +44,11 @@ export default function BookTypePage() {
   const [notFound, setNotFound]   = useState(false);
 
   const [selectedDate, setSelectedDate] = useState('');
-  const [slots, setSlots]               = useState([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState('');
+  const [slots, setSlots]                       = useState([]);
+  const [slotsLoading, setSlotsLoading]         = useState(false);
+  const [selectedSlot, setSelectedSlot]         = useState('');
+  const [dayBlocked, setDayBlocked]             = useState(false);
+  const [blockedTimeRange, setBlockedTimeRange] = useState(null);
 
   const [step, setStep]     = useState('calendar'); // 'calendar' | 'form' | 'done'
   const [form, setForm]     = useState({ name: '', phone: '', email: '', notes: '', answers: {} });
@@ -70,9 +72,15 @@ export default function BookTypePage() {
     setSlotsLoading(true);
     setSlots([]);
     setSelectedSlot('');
+    setDayBlocked(false);
+    setBlockedTimeRange(null);
     fetch(`${API_URL}/public/book/${slug}/types/${typeId}/slots?from=${selectedDate}&to=${selectedDate}`)
       .then(r => r.json())
-      .then(json => setSlots(json.data?.slots || []))
+      .then(json => {
+        setSlots(json.data?.slots || []);
+        setDayBlocked(!!json.data?.blocked);
+        setBlockedTimeRange(json.data?.blockedTimeRange || null);
+      })
       .catch(() => setSlots([]))
       .finally(() => setSlotsLoading(false));
   }, [selectedDate, slug, typeId]);
@@ -287,7 +295,33 @@ export default function BookTypePage() {
               Horarios disponibles
             </label>
             {slotsLoading && <p style={{ color: '#888', fontSize: 13 }}>Cargando horarios...</p>}
-            {!slotsLoading && slots.length === 0 && (
+            {!slotsLoading && dayBlocked && (
+              <div style={{
+                background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10,
+                padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <span style={{ fontSize: 18 }}>⛔</span>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#dc2626' }}>Día no disponible</div>
+                  <div style={{ fontSize: 12.5, color: '#ef4444', marginTop: 2 }}>No se aceptan turnos en esta fecha. Elegí otro día.</div>
+                </div>
+              </div>
+            )}
+            {!slotsLoading && !dayBlocked && blockedTimeRange && slots.length === 0 && (
+              <div style={{
+                background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10,
+                padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <span style={{ fontSize: 18 }}>⏱</span>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#c2410c' }}>Horario bloqueado</div>
+                  <div style={{ fontSize: 12.5, color: '#ea580c', marginTop: 2 }}>
+                    No hay turnos de {blockedTimeRange.startTime} a {blockedTimeRange.endTime}. Elegí otra fecha.
+                  </div>
+                </div>
+              </div>
+            )}
+            {!slotsLoading && !dayBlocked && !blockedTimeRange && slots.length === 0 && (
               <p style={{ color: '#888', fontSize: 13 }}>No hay horarios disponibles para este día.</p>
             )}
             {!slotsLoading && slots.length > 0 && (
