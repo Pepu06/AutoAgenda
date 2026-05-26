@@ -22,6 +22,7 @@ export default function AppointmentsPage() {
   const [connected, setConnected]   = useState(true);
   const [filterDate, setFilterDate] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [search, setSearch] = useState('');
   const [editingEvent, setEditingEvent] = useState(null);
 
   const fetchEvents = useCallback(async () => {
@@ -49,6 +50,13 @@ export default function AppointmentsPage() {
       const eventDate = new Date(e.start).toISOString().slice(0, 10);
       if (eventDate !== filterDate) return false;
     }
+    if (search) {
+      const q = search.toLowerCase();
+      const matchTitle = e.title?.toLowerCase().includes(q);
+      const matchPhone = e.phone?.toLowerCase().includes(q);
+      const matchAttendees = e.attendees?.some(a => a.name?.toLowerCase().includes(q) || a.email?.toLowerCase().includes(q));
+      if (!matchTitle && !matchPhone && !matchAttendees) return false;
+    }
     return true;
   });
 
@@ -59,6 +67,13 @@ export default function AppointmentsPage() {
       </div>
 
       <div className={styles.filters}>
+        <input
+          type="text"
+          placeholder="Buscar por nombre o teléfono..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className={styles.searchInput}
+        />
         <input
           type="date"
           value={filterDate}
