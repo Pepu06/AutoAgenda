@@ -44,6 +44,12 @@ export default function AppointmentsPage() {
     fetchEvents();
   }
 
+  async function handleDelete(appointmentId) {
+    if (!confirm('¿Eliminar esta cita? Esta acción no se puede deshacer.')) return;
+    await api.delete(`/appointments/${appointmentId}`);
+    fetchEvents();
+  }
+
   const filtered = events.filter(e => {
     if (filterStatus && e.status !== filterStatus) return false;
     if (filterDate) {
@@ -160,13 +166,22 @@ export default function AppointmentsPage() {
                           <option value="cancelled">Cancelado</option>
                         </select>
                         {e.appointmentId && (
-                          <button
-                            onClick={() => setEditingEvent(e)}
-                            style={editBtnStyle}
-                            title="Editar cita"
-                          >
-                            Editar
-                          </button>
+                          <>
+                            <button
+                              onClick={() => setEditingEvent(e)}
+                              style={editBtnStyle}
+                              title="Editar cita"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDelete(e.appointmentId)}
+                              style={deleteBtnStyle}
+                              title="Eliminar cita"
+                            >
+                              Eliminar
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -188,6 +203,20 @@ export default function AppointmentsPage() {
     </div>
   );
 }
+
+const deleteBtnStyle = {
+  padding: '6px 14px',
+  background: 'var(--red-bg)',
+  border: '1px solid var(--red)',
+  borderRadius: 100,
+  fontSize: 12,
+  fontWeight: 600,
+  color: 'var(--red)',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  whiteSpace: 'nowrap',
+  transition: 'opacity 0.15s',
+};
 
 const editBtnStyle = {
   padding: '6px 14px',
