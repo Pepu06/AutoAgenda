@@ -179,6 +179,13 @@ export default function DashboardLayout({ children }) {
     }).catch(() => {});
   }, []);
 
+  // Escuchar reconexión exitosa desde la página del calendario
+  useEffect(() => {
+    function onGcalConnected() { setGcalReconnectBanner(false); }
+    window.addEventListener('gcal-connected', onGcalConnected);
+    return () => window.removeEventListener('gcal-connected', onGcalConnected);
+  }, []);
+
   // Close mobile menu when route changes
   useEffect(() => {
     setMobileMenuOpen(false);

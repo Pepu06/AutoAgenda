@@ -109,7 +109,7 @@ export default function CalendarPage() {
     try {
       const res = await api.get('/calendar/events');
       setEvents(res.data || []);
-      setConnected(res.connected !== false);
+      if (res.connected === false) setConnected(false);
     } catch { }
     finally { setSyncing(false); }
   }, []);
@@ -171,8 +171,19 @@ export default function CalendarPage() {
     access_type: 'offline',
     prompt: 'consent',
     onSuccess: async ({ code }) => {
-      await api.post('/calendar/connect', { code });
-      setConnected(true);
+      try {
+        await api.post('/calendar/connect', { code });
+      } catch (err) {
+        alert(err.message || 'Error al guardar la conexión con Google Calendar');
+        return;
+      }
+      // POST succeeded — dismiss banner immediately, then sync authoritative state
+      window.dispatchEvent(new CustomEvent('gcal-connected'));
+      try {
+        await fetchStatus();
+      } catch {
+        setConnected(true);
+      }
     },
     onError: () => alert('Error al conectar Google Calendar'),
   });
