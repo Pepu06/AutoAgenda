@@ -76,13 +76,27 @@ async function remove(req, res, next) {
       .from('services').select('id').eq('id', req.params.id).eq('tenant_id', req.tenantId).maybeSingle();
     if (!existing) throw new NotFoundError('Service not found');
 
-    const { error } = await supabase.from('services').delete().eq('id', req.params.id);
-    if (error) {
-      if (error.code === '23503') {
-        return res.status(409).json({ success: false, error: 'No se puede eliminar el servicio porque tiene citas asociadas' });
-      }
-      throw error;
+    const now = new Date().toISOString();
+
+    const { data: futureAppts } = await supabase
+      .from('appointments')
+      .select('id')
+      .eq('service_id', req.params.id)
+      .gte('scheduled_at', now)
+      .limit(1);
+
+    if (futureAppts && futureAppts.length > 0) {
+      return res.status(409).json({ success: false, error: 'No se puede eliminar el servicio porque tiene citas futuras asociadas' });
     }
+
+    await supabase
+      .from('appointments')
+      .update({ service_id: null })
+      .eq('service_id', req.params.id)
+      .lt('scheduled_at', now);
+
+    const { error } = await supabase.from('services').delete().eq('id', req.params.id);
+    if (error) throw error;
     return res.json({ success: true, data: null });
   } catch (err) { return next(err); }
 }
