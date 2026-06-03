@@ -82,18 +82,23 @@ async function remove(req, res, next) {
       .from('appointments')
       .select('id')
       .eq('service_id', req.params.id)
-      .gte('scheduled_at', now)
-      .limit(1);
+      .gte('scheduled_at', now);
 
     if (futureAppts && futureAppts.length > 0) {
       return res.status(409).json({ success: false, error: 'No se puede eliminar el servicio porque tiene citas futuras asociadas' });
     }
 
-    await supabase
+    const { data: pastAppts } = await supabase
       .from('appointments')
-      .update({ service_id: null })
+      .select('id')
       .eq('service_id', req.params.id)
       .lt('scheduled_at', now);
+
+    if (pastAppts && pastAppts.length > 0) {
+      const pastIds = pastAppts.map(a => a.id);
+      await supabase.from('message_logs').delete().in('appointment_id', pastIds);
+      await supabase.from('appointments').delete().in('id', pastIds);
+    }
 
     const { error } = await supabase.from('services').delete().eq('id', req.params.id);
     if (error) throw error;
