@@ -77,7 +77,12 @@ async function remove(req, res, next) {
     if (!existing) throw new NotFoundError('Service not found');
 
     const { error } = await supabase.from('services').delete().eq('id', req.params.id);
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23503') {
+        return res.status(409).json({ success: false, error: 'No se puede eliminar el servicio porque tiene citas asociadas' });
+      }
+      throw error;
+    }
     return res.json({ success: true, data: null });
   } catch (err) { return next(err); }
 }
