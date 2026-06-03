@@ -70,8 +70,12 @@ export default function ServicesPage() {
 
   async function handleDelete(id) {
     if (!confirm('¿Eliminar servicio?')) return;
-    await api.delete(`/services/${id}`);
-    fetchServices();
+    try {
+      await api.delete(`/services/${id}`);
+      fetchServices();
+    } catch (err) {
+      alert(err.message || 'No se pudo eliminar el servicio');
+    }
   }
 
   return (

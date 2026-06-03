@@ -16,6 +16,19 @@ async function list(req, res, next) {
 async function create(req, res, next) {
   try {
     const { name, phone, notes, email, dni, birthDate } = req.body;
+
+    const [{ data: byPhone }, { data: byName }] = await Promise.all([
+      supabase.from('contacts').select('id').eq('tenant_id', req.tenantId).eq('phone', phone).limit(1),
+      supabase.from('contacts').select('id').eq('tenant_id', req.tenantId).ilike('name', name).limit(1),
+    ]);
+
+    if (byPhone && byPhone.length > 0) {
+      return res.status(409).json({ success: false, error: 'Ya existe un contacto con ese teléfono' });
+    }
+    if (byName && byName.length > 0) {
+      return res.status(409).json({ success: false, error: 'Ya existe un contacto con ese nombre' });
+    }
+
     const { data, error } = await supabase
       .from('contacts')
       .insert({ tenant_id: req.tenantId, name, phone, notes, email: email || null, dni: dni || null, birth_date: birthDate || null })
