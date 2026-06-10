@@ -714,25 +714,27 @@ export default function CalendarPage() {
                   </button>
                 </div>
                 {showNewContact ? (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <input
-                      autoFocus
-                      type="text"
-                      placeholder="Nombre"
-                      value={newContactName}
-                      onChange={e => setNewContactName(e.target.value)}
-                      style={{ flex: 2, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
-                    />
-                    <input
-                      type="tel"
-                      placeholder="+549..."
-                      value={newContactPhone}
-                      onChange={e => setNewContactPhone(e.target.value)}
-                      style={{ flex: 2, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
-                    />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Nombre"
+                        value={newContactName}
+                        onChange={e => setNewContactName(e.target.value)}
+                        style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
+                      />
+                      <input
+                        type="tel"
+                        placeholder="+549..."
+                        value={newContactPhone}
+                        onChange={e => setNewContactPhone(e.target.value)}
+                        style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
+                      />
+                    </div>
                     <button type="button" onClick={handleCreateContact} disabled={newContactSaving || !newContactName || !newContactPhone}
-                      style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: '#7C6EF8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, opacity: newContactSaving ? 0.6 : 1 }}>
-                      {newContactSaving ? '...' : 'Crear'}
+                      style={{ width: '100%', padding: '7px 0', borderRadius: 8, background: '#7C6EF8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, opacity: (newContactSaving || !newContactName || !newContactPhone) ? 0.5 : 1 }}>
+                      {newContactSaving ? 'Creando...' : 'Crear contacto'}
                     </button>
                   </div>
                 ) : (
@@ -753,27 +755,29 @@ export default function CalendarPage() {
                   </button>
                 </div>
                 {showNewService ? (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <input
-                      autoFocus
-                      type="text"
-                      placeholder="Nombre del servicio"
-                      value={newServiceName}
-                      onChange={e => setNewServiceName(e.target.value)}
-                      style={{ flex: 3, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
-                    />
-                    <input
-                      type="number"
-                      min="5"
-                      max="480"
-                      placeholder="Min"
-                      value={newServiceDuration}
-                      onChange={e => setNewServiceDuration(e.target.value)}
-                      style={{ flex: 1, padding: '7px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
-                    />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Nombre del servicio"
+                        value={newServiceName}
+                        onChange={e => setNewServiceName(e.target.value)}
+                        style={{ flex: 3, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
+                      />
+                      <input
+                        type="number"
+                        min="5"
+                        max="480"
+                        placeholder="Min"
+                        value={newServiceDuration}
+                        onChange={e => setNewServiceDuration(e.target.value)}
+                        style={{ flex: 1, padding: '7px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
+                      />
+                    </div>
                     <button type="button" onClick={handleCreateService} disabled={newServiceSaving || !newServiceName || !newServiceDuration}
-                      style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: '#7C6EF8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, opacity: newServiceSaving ? 0.6 : 1 }}>
-                      {newServiceSaving ? '...' : 'Crear'}
+                      style={{ width: '100%', padding: '7px 0', borderRadius: 8, background: '#7C6EF8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, opacity: (newServiceSaving || !newServiceName || !newServiceDuration) ? 0.5 : 1 }}>
+                      {newServiceSaving ? 'Creando...' : 'Crear servicio'}
                     </button>
                   </div>
                 ) : (
