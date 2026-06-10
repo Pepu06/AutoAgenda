@@ -73,6 +73,8 @@ export default function SettingsPage() {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState('');
   const eventSourceRef = useRef(null);
+  const isLoadedRef = useRef(false);
+  const autoSaveTimerRef = useRef(null);
 
   useEffect(() => {
     api.get('/settings/onboarding').then(res => {
@@ -104,8 +106,18 @@ export default function SettingsPage() {
       if (d.cancelReplyMessage  != null) mapped.cancelReplyMessage  = d.cancelReplyMessage;
       if (d.baileysConnected != null) mapped.baileysConnected = d.baileysConnected;
       setSettings(s => ({ ...s, ...mapped }));
+      isLoadedRef.current = true;
     }).catch(() => { }).finally(() => setLoading(false));
   }, []);
+
+  // Auto-save: debounce 1.5s after any change
+  useEffect(() => {
+    if (!isLoadedRef.current) return;
+    clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => handleSave(), 1500);
+    return () => clearTimeout(autoSaveTimerRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
 
   function set(key, value) {
     setSettings(s => ({ ...s, [key]: value }));
@@ -622,10 +634,11 @@ export default function SettingsPage() {
       <div className={styles.saveBar}>
         <div className={styles.saveStatus}>
           {error && <span className={styles.errorText}>{error}</span>}
-          {saved && <span className={styles.savedText}>✓ Cambios guardados</span>}
+          {!error && saved && <span className={styles.savedText}>✓ Guardado automáticamente</span>}
+          {!error && saving && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Guardando...</span>}
         </div>
         <button className={styles.btnSave} onClick={handleSave} disabled={saving}>
-          {saving ? 'Guardando...' : 'Guardar cambios'}
+          Guardar ahora
         </button>
       </div>
     </div>
