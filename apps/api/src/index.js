@@ -10,6 +10,7 @@ const { startMonthlyBillingCron } = require('./workers/monthlyBillingCron');
 const { startSubscriptionRenewalCron } = require('./workers/subscriptionRenewalCron');
 const { startCalendarWatchRenewalCron } = require('./workers/calendarWatchRenewalCron');
 const { startAppointmentCleanupCron } = require('./workers/appointmentCleanupCron');
+const { restoreAllSessions } = require('./services/baileys-session');
 
 logger.info(`[Boot] Queue: ${env.REDIS_URL ? 'enabled' : 'disabled'}`);
 
@@ -25,4 +26,5 @@ app.listen(env.PORT, () => {
   startSubscriptionRenewalCron();
   startCalendarWatchRenewalCron();
   startAppointmentCleanupCron();
+  restoreAllSessions().catch(err => logger.error({ err }, '[Baileys] Session restore failed'));
 });

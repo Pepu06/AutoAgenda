@@ -3,12 +3,15 @@ const env = require('../config/env');
 const { UnauthorizedError } = require('../errors');
 
 function authenticate(req, _res, next) {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
+  const token =
+    (req.headers.authorization?.startsWith('Bearer ')
+      ? req.headers.authorization.slice(7)
+      : null) || req.query.token;
+
+  if (!token) {
     return next(new UnauthorizedError('Missing or invalid authorization header'));
   }
 
-  const token = header.slice(7);
   try {
     const payload = jwt.verify(token, env.JWT_SECRET);
     req.tenantId = payload.tenantId;

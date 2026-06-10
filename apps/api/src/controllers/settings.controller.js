@@ -17,14 +17,17 @@ const SELECT_COLS = ['id', 'name', ...ALLOWED_FIELDS].join(', ');
 
 async function getSettings(req, res, next) {
   try {
-    const { data, error } = await supabase
-      .from('tenants')
-      .select(SELECT_COLS)
-      .eq('id', req.tenantId)
-      .single();
+    const [settingsResult, baileysResult] = await Promise.all([
+      supabase.from('tenants').select(SELECT_COLS).eq('id', req.tenantId).single(),
+      supabase.from('baileys_sessions').select('connected').eq('tenant_id', req.tenantId).single(),
+    ]);
 
-    if (error) throw error;
-    return res.json({ success: true, data: convertKeys(data) });
+    if (settingsResult.error) throw settingsResult.error;
+
+    const data = convertKeys(settingsResult.data);
+    data.baileysConnected = baileysResult.data?.connected ?? false;
+
+    return res.json({ success: true, data });
   } catch (err) { return next(err); }
 }
 
