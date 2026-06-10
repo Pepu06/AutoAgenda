@@ -1,17 +1,23 @@
 // apps/api/src/services/baileys-auth-state.js
 const { initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
 const { supabase } = require('@autoagenda/db');
+const logger = require('../config/logger');
 
 /**
  * Returns a Baileys-compatible auth state backed by Supabase.
  * Compatible with Baileys' useMultiFileAuthState interface.
  */
 async function useSupabaseAuthState(tenantId) {
-  const { data: row } = await supabase
+  const { data: row, error: loadError } = await supabase
     .from('baileys_sessions')
     .select('creds_json, keys_json')
     .eq('tenant_id', tenantId)
     .single();
+
+  // PGRST116 = no row found (expected for new tenants)
+  if (loadError && loadError.code !== 'PGRST116') throw loadError;
+
+  logger.info({ tenantId, fresh: !row?.creds_json }, '[BaileysAuth] Auth state loaded');
 
   const creds = row?.creds_json
     ? JSON.parse(JSON.stringify(row.creds_json), BufferJSON.reviver)
@@ -58,12 +64,16 @@ async function useSupabaseAuthState(tenantId) {
     const credsJson = JSON.parse(JSON.stringify(state.creds, BufferJSON.replacer));
     const keysJson  = JSON.parse(JSON.stringify(keys,        BufferJSON.replacer));
 
-    await supabase.from('baileys_sessions').upsert({
+    const { error: upsertError } = await supabase.from('baileys_sessions').upsert({
       tenant_id:  tenantId,
       creds_json: credsJson,
       keys_json:  keysJson,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'tenant_id' });
+
+    if (upsertError) throw upsertError;
+
+    logger.info({ tenantId }, '[BaileysAuth] Credentials persisted');
   }
 
   const saveCreds = _persist;
