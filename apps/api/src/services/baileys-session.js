@@ -9,7 +9,7 @@ const { supabase } = require('@autoagenda/db');
 const { useSupabaseAuthState } = require('./baileys-auth-state');
 const logger = require('../config/logger');
 
-// tenantId -> { socket, qrCallbacks: Set<fn>, statusCallbacks: Set<fn> }
+// tenantId -> { socket, qrCallbacks: Set<fn>, statusCallbacks: Set<fn>, lastQR: string|null }
 const sessions = new Map();
 const stoppedIntentionally = new Set();
 
@@ -18,11 +18,17 @@ async function startSession(tenantId) {
   if (sessions.has(tenantId)) {
     const existing = sessions.get(tenantId);
     if (existing.socket?.user) return existing.socket; // already connected
-    stopSession(tenantId); // stale — restart
+    // If socket is null, a reconnect is already in progress — reuse the entry so callbacks survive
+    if (existing.socket === null) return null;
+    // Stale socket with no user — close it but keep callbacks
+    try { existing.socket.end(undefined); } catch (_) {}
+    existing.socket = null;
+    existing.lastQR = null;
   }
 
-  const entry = { socket: null, qrCallbacks: new Set(), statusCallbacks: new Set() };
-  sessions.set(tenantId, entry);
+  // Reuse existing entry (preserves qrCallbacks/statusCallbacks across reconnects) or create new
+  const entry = sessions.get(tenantId) || { socket: null, qrCallbacks: new Set(), statusCallbacks: new Set(), lastQR: null };
+  if (!sessions.has(tenantId)) sessions.set(tenantId, entry);
 
   const { state, saveCreds } = await useSupabaseAuthState(tenantId);
   const { version } = await fetchLatestBaileysVersion();
@@ -43,6 +49,7 @@ async function startSession(tenantId) {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
+      entry.lastQR = qr; // cache so late subscribers get it immediately
       for (const cb of entry.qrCallbacks) cb(qr);
     }
 
@@ -58,7 +65,8 @@ async function startSession(tenantId) {
     if (connection === 'close') {
       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const loggedOut = reason === DisconnectReason.loggedOut;
-      logger.warn({ tenantId, reason }, '[Baileys] Disconnected');
+      const wasConnected = Boolean(entry.socket?.user);
+      logger.warn({ tenantId, reason, wasConnected }, '[Baileys] Disconnected');
 
       const { error: updateErr } = await supabase
         .from('baileys_sessions')
@@ -66,16 +74,24 @@ async function startSession(tenantId) {
         .eq('tenant_id', tenantId);
       if (updateErr) logger.error({ tenantId, err: updateErr }, '[Baileys] Failed to update connected=false');
 
-      for (const cb of entry.statusCallbacks) cb('disconnected');
-
-      sessions.delete(tenantId);
-
       const intentional = stoppedIntentionally.delete(tenantId);
 
-      if (!intentional && !loggedOut) {
+      if (intentional || loggedOut) {
+        // Truly done — notify frontend and clean up
+        for (const cb of entry.statusCallbacks) cb('disconnected');
+        sessions.delete(tenantId);
+        if (loggedOut) {
+          await supabase.from('baileys_sessions').delete().eq('tenant_id', tenantId);
+        }
+      } else {
+        // QR expired or transient drop — null the socket, keep callbacks, reconnect silently
+        entry.socket = null;
+        entry.lastQR = null;
+        if (wasConnected) {
+          // Was actually in use — tell frontend it dropped
+          for (const cb of entry.statusCallbacks) cb('disconnected');
+        }
         setTimeout(() => startSession(tenantId), 5000);
-      } else if (loggedOut) {
-        await supabase.from('baileys_sessions').delete().eq('tenant_id', tenantId);
       }
     }
   });
@@ -89,7 +105,7 @@ function stopSession(tenantId) {
   if (entry?.socket) {
     try { entry.socket.end(undefined); } catch (stopErr) { logger.warn({ stopErr }, '[Baileys] Error ending socket'); }
   }
-  sessions.delete(tenantId);
+  // Don't delete entry here — connection.update 'close' handler will clean up after firing 'disconnected'
 }
 
 function getSocket(tenantId) {
@@ -103,7 +119,10 @@ function isConnected(tenantId) {
 
 function onQR(tenantId, callback) {
   if (!sessions.has(tenantId)) return () => {};
-  sessions.get(tenantId).qrCallbacks.add(callback);
+  const entry = sessions.get(tenantId);
+  entry.qrCallbacks.add(callback);
+  // Replay last QR immediately if available (avoids race between startSession and onQR)
+  if (entry.lastQR) callback(entry.lastQR);
   return () => sessions.get(tenantId)?.qrCallbacks.delete(callback);
 }
 
