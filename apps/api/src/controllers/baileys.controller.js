@@ -2,6 +2,7 @@
 const QRCode = require('qrcode');
 const { startSession, stopSession, isConnected, onQR, onStatus } = require('../services/baileys-session');
 const { supabase } = require('@autoagenda/db');
+const logger = require('../config/logger');
 
 async function getStatus(req, res, next) {
   try {
@@ -51,7 +52,7 @@ async function qrStream(req, res) {
     try {
       const dataUrl = await QRCode.toDataURL(qrRaw);
       res.write(`event: qr\ndata: ${JSON.stringify({ qr: dataUrl })}\n\n`);
-    } catch (_) {}
+    } catch (qrErr) { logger.warn({ qrErr }, '[Baileys] QR encode failed'); }
   });
 
   const removeStatus = onStatus(tenantId, (status) => {

@@ -87,7 +87,7 @@ function stopSession(tenantId) {
   stoppedIntentionally.add(tenantId);
   const entry = sessions.get(tenantId);
   if (entry?.socket) {
-    try { entry.socket.end(undefined); } catch (_) {}
+    try { entry.socket.end(undefined); } catch (stopErr) { logger.warn({ stopErr }, '[Baileys] Error ending socket'); }
   }
   sessions.delete(tenantId);
 }
