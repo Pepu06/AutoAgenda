@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '../../../lib/api';
 import { clearAuth } from '../../../lib/auth';
@@ -37,6 +37,7 @@ const DEFAULTS = {
   location: '',
   confirmReplyMessage: '',
   cancelReplyMessage: '',
+  baileysConnected: false,
 };
 
 const WEEK_DAYS = [
@@ -68,6 +69,10 @@ export default function SettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(true);
+  const [qrImage, setQrImage] = useState(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState('');
+  const eventSourceRef = useRef(null);
 
   useEffect(() => {
     api.get('/settings/onboarding').then(res => {
@@ -97,6 +102,7 @@ export default function SettingsPage() {
       if (d.location     != null) mapped.location     = d.location;
       if (d.confirmReplyMessage != null) mapped.confirmReplyMessage = d.confirmReplyMessage;
       if (d.cancelReplyMessage  != null) mapped.cancelReplyMessage  = d.cancelReplyMessage;
+      if (d.baileysConnected != null) mapped.baileysConnected = d.baileysConnected;
       setSettings(s => ({ ...s, ...mapped }));
     }).catch(() => { }).finally(() => setLoading(false));
   }, []);
@@ -150,6 +156,62 @@ export default function SettingsPage() {
       setDeleting(false);
     }
   }
+
+  function startQRScan() {
+    if (eventSourceRef.current) eventSourceRef.current.close();
+    setQrLoading(true);
+    setQrImage(null);
+    setQrError('');
+
+    api.post('/baileys/connect').catch(() => {});
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const es = new EventSource(`${apiUrl}/baileys/qr?token=${token}`);
+    eventSourceRef.current = es;
+
+    es.addEventListener('qr', (e) => {
+      const { qr } = JSON.parse(e.data);
+      setQrImage(qr);
+      setQrLoading(false);
+    });
+
+    es.addEventListener('connected', () => {
+      es.close();
+      setQrImage(null);
+      setQrLoading(false);
+      set('baileysConnected', true);
+    });
+
+    es.addEventListener('disconnected', () => {
+      es.close();
+      setQrImage(null);
+      setQrLoading(false);
+      setQrError('Conexión fallida. Intentá de nuevo.');
+    });
+
+    es.onerror = () => {
+      setQrLoading(false);
+      setQrError('Error de conexión. Verificá que la API esté corriendo.');
+      es.close();
+    };
+  }
+
+  async function handleBaileysDisconnect() {
+    try {
+      await api.delete('/baileys/session');
+      set('baileysConnected', false);
+      setQrImage(null);
+      setQrError('');
+    } catch (err) {
+      setError(err.message || 'Error al desconectar');
+    }
+  }
+
+  // Cleanup EventSource on unmount
+  useEffect(() => {
+    return () => eventSourceRef.current?.close();
+  }, []);
 
   if (loading) return <div className="spinnerWrap"><div className="spinner" /></div>;
 
@@ -431,6 +493,99 @@ export default function SettingsPage() {
               <div style={{ fontSize: 13, color: 'var(--text-2)', padding: '10px 0' }}>
                 La variable <code style={{ background: 'var(--surface-2)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace' }}>{'{{ubicacion}}'}</code> tomará el valor del campo "Lugar" de cada evento en Google Calendar.
               </div>
+            </Field>
+          )}
+        </div>
+      </section>
+
+      {/* WHATSAPP */}
+      <section className={styles.section} data-tour="settings-whatsapp">
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>WhatsApp</h2>
+          <p className={styles.sectionDesc}>Configurá el proveedor de mensajería de WhatsApp</p>
+        </div>
+        <div className={styles.fields}>
+          <Field label="Proveedor de WhatsApp">
+            <select
+              className={styles.select}
+              value={settings.whatsappProvider}
+              onChange={e => set('whatsappProvider', e.target.value)}
+            >
+              <option value="meta">Meta (oficial)</option>
+              <option value="wasender">WasenderAPI</option>
+              <option value="baileys">WhatsApp Propio (sin costo extra)</option>
+            </select>
+          </Field>
+
+          {settings.whatsappProvider === 'meta' && (
+            <>
+              <Field label="Phone Number ID">
+                <input
+                  className={styles.input}
+                  value={settings.whatsappPhoneNumberId}
+                  onChange={e => set('whatsappPhoneNumberId', e.target.value)}
+                  placeholder="Ej: 123456789012345"
+                />
+              </Field>
+              <Field label="Access Token">
+                <input
+                  className={styles.input}
+                  value={settings.whatsappAccessToken}
+                  onChange={e => set('whatsappAccessToken', e.target.value)}
+                  placeholder="EAABwzLixnjYBO..."
+                  type="password"
+                />
+              </Field>
+            </>
+          )}
+
+          {settings.whatsappProvider === 'wasender' && (
+            <Field label="WasenderAPI Key">
+              <input
+                className={styles.input}
+                value={settings.wasenderApiKey}
+                onChange={e => set('wasenderApiKey', e.target.value)}
+                placeholder="Tu API key de WasenderAPI"
+                type="password"
+              />
+            </Field>
+          )}
+
+          {settings.whatsappProvider === 'baileys' && (
+            <Field label="Conexión WhatsApp">
+              {settings.baileysConnected ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ color: '#22c55e', fontWeight: 600 }}>● Conectado</span>
+                  <button
+                    className={styles.btnDanger}
+                    onClick={handleBaileysDisconnect}
+                    type="button"
+                  >
+                    Desconectar
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                    Escaneá el código QR con tu WhatsApp para conectar tu número. El código expira cada 20 segundos y se actualiza automáticamente.
+                  </p>
+                  {qrError && (
+                    <p style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px' }}>{qrError}</p>
+                  )}
+                  {qrImage ? (
+                    <img src={qrImage} alt="QR WhatsApp" style={{ width: '200px', height: '200px', borderRadius: '8px', display: 'block' }} />
+                  ) : (
+                    <button
+                      className={styles.btnSave}
+                      onClick={startQRScan}
+                      disabled={qrLoading}
+                      type="button"
+                    >
+                      {qrLoading ? 'Generando QR...' : 'Conectar WhatsApp'}
+                    </button>
+                  )}
+                </div>
+              )}
             </Field>
           )}
         </div>
