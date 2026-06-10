@@ -12,6 +12,7 @@
     "@autoagenda/db": "*",
     "@autoagenda/shared": "*",
     "@sentry/node": "^10.47.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
     "axios": "^1.7.0",
     "bcrypt": "^5.1.1",
     "bullmq": "^5.12.0",
@@ -26,6 +27,7 @@
     "nodemailer": "^8.0.5",
     "pino": "^9.3.2",
     "pino-pretty": "^11.2.1",
+    "qrcode": "^1.5.4",
     "resend": "^6.10.0",
     "zod": "^3.23.8"
   },
