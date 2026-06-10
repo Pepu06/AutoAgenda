@@ -1,0 +1,74 @@
+// apps/api/src/services/baileys-auth-state.js
+const { initAuthCreds, BufferJSON, proto } = require('@whiskeysockets/baileys');
+const { supabase } = require('@autoagenda/db');
+
+/**
+ * Returns a Baileys-compatible auth state backed by Supabase.
+ * Compatible with Baileys' useMultiFileAuthState interface.
+ */
+async function useSupabaseAuthState(tenantId) {
+  const { data: row } = await supabase
+    .from('baileys_sessions')
+    .select('creds_json, keys_json')
+    .eq('tenant_id', tenantId)
+    .single();
+
+  const creds = row?.creds_json
+    ? JSON.parse(JSON.stringify(row.creds_json), BufferJSON.reviver)
+    : initAuthCreds();
+
+  const keys = row?.keys_json
+    ? JSON.parse(JSON.stringify(row.keys_json), BufferJSON.reviver)
+    : {};
+
+  const state = {
+    creds,
+    keys: {
+      get: (type, ids) => {
+        const data = {};
+        for (const id of ids) {
+          let value = keys[`${type}-${id}`];
+          if (value) {
+            if (type === 'app-state-sync-key') {
+              value = proto.Message.AppStateSyncKeyData.fromObject(value);
+            }
+            data[id] = value;
+          }
+        }
+        return data;
+      },
+      set: async (data) => {
+        for (const category of Object.keys(data)) {
+          for (const id of Object.keys(data[category])) {
+            const value = data[category][id];
+            const key = `${category}-${id}`;
+            if (value) {
+              keys[key] = value;
+            } else {
+              delete keys[key];
+            }
+          }
+        }
+        await _persist();
+      },
+    },
+  };
+
+  async function _persist() {
+    const credsJson = JSON.parse(JSON.stringify(state.creds, BufferJSON.replacer));
+    const keysJson  = JSON.parse(JSON.stringify(keys,        BufferJSON.replacer));
+
+    await supabase.from('baileys_sessions').upsert({
+      tenant_id:  tenantId,
+      creds_json: credsJson,
+      keys_json:  keysJson,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'tenant_id' });
+  }
+
+  const saveCreds = _persist;
+
+  return { state, saveCreds };
+}
+
+module.exports = { useSupabaseAuthState };
