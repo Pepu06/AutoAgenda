@@ -11,6 +11,7 @@ const logger = require('../config/logger');
 
 // tenantId -> { socket, qrCallbacks: Set<fn>, statusCallbacks: Set<fn> }
 const sessions = new Map();
+const stoppedIntentionally = new Set();
 
 async function startSession(tenantId) {
   // If already have an open socket, return it
@@ -30,7 +31,7 @@ async function startSession(tenantId) {
     version,
     auth: state,
     printQRInTerminal: false,
-    logger: logger.child({ baileys: tenantId }),
+    logger: logger.child({ baileys: tenantId, level: 'warn' }),
     browser: ['RecordAI', 'Chrome', '1.0'],
   });
 
@@ -47,9 +48,10 @@ async function startSession(tenantId) {
 
     if (connection === 'open') {
       logger.info({ tenantId }, '[Baileys] Connected');
-      await supabase
+      const { error: upsertErr } = await supabase
         .from('baileys_sessions')
         .upsert({ tenant_id: tenantId, connected: true, updated_at: new Date().toISOString() }, { onConflict: 'tenant_id' });
+      if (upsertErr) logger.error({ tenantId, err: upsertErr }, '[Baileys] Failed to update connected=true');
       for (const cb of entry.statusCallbacks) cb('connected');
     }
 
@@ -58,18 +60,21 @@ async function startSession(tenantId) {
       const loggedOut = reason === DisconnectReason.loggedOut;
       logger.warn({ tenantId, reason }, '[Baileys] Disconnected');
 
-      await supabase
+      const { error: updateErr } = await supabase
         .from('baileys_sessions')
         .update({ connected: false, updated_at: new Date().toISOString() })
         .eq('tenant_id', tenantId);
+      if (updateErr) logger.error({ tenantId, err: updateErr }, '[Baileys] Failed to update connected=false');
 
       for (const cb of entry.statusCallbacks) cb('disconnected');
 
       sessions.delete(tenantId);
 
-      if (!loggedOut) {
+      const intentional = stoppedIntentionally.delete(tenantId);
+
+      if (!intentional && !loggedOut) {
         setTimeout(() => startSession(tenantId), 5000);
-      } else {
+      } else if (loggedOut) {
         await supabase.from('baileys_sessions').delete().eq('tenant_id', tenantId);
       }
     }
@@ -79,6 +84,7 @@ async function startSession(tenantId) {
 }
 
 function stopSession(tenantId) {
+  stoppedIntentionally.add(tenantId);
   const entry = sessions.get(tenantId);
   if (entry?.socket) {
     try { entry.socket.end(undefined); } catch (_) {}
