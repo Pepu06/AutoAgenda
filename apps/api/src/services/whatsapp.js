@@ -3,6 +3,29 @@ const logger = require('../config/logger');
 const env = require('../config/env');
 const { getSocket } = require('./baileys-session');
 
+const DEFAULT_REMINDER_TEMPLATE =
+`📅 Recordatorio de turno con {{negocio}}
+
+Hola {{nombre}}, ¿cómo estás? 👋
+
+📆 Fecha: {{fecha}}
+🕐 Hora: {{hora}}
+📌 Ubicación: {{ubicacion}}`;
+
+const DEFAULT_CONFIRMATION_TEMPLATE =
+`✅ Confirmación de turno
+
+Hola {{nombre}}, tu turno de {{servicio}} fue agendado para el {{fecha}} a las {{hora}}.
+📌 Ubicación: {{ubicacion}}
+
+Te enviaremos un recordatorio {{recordatorio}}.
+
+{{negocio}}`;
+
+function renderTemplate(template, vars) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
+}
+
 const META_MESSAGES_URL = `https://graph.facebook.com/v21.0/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 const WASENDER_API_URL = 'https://wasenderapi.com/api/send-message';
 
@@ -28,7 +51,10 @@ async function sendTextMessage(phone, text, tenantConfig = {}) {
 
 async function sendBaileysTextMessage(tenantId, phone, text) {
   const sock = getSocket(tenantId);
-  if (!sock?.user) throw new Error(`[Baileys] No active session for tenant ${tenantId}`);
+  if (!sock?.user) {
+    logger.warn({ tenantId, phone }, '[Baileys] No active session — message skipped');
+    return null;
+  }
 
   // Baileys expects JID format: phone@s.whatsapp.net (strip leading +)
   const jid = phone.replace(/^\+/, '') + '@s.whatsapp.net';
@@ -96,18 +122,9 @@ async function sendInteractiveButtons(phone, body, buttons, tenantConfig = {}) {
   }
 
   if (provider === 'baileys') {
-    const jid = phone.replace(/^\+/, '') + '@s.whatsapp.net';
-    const sock = getSocket(tenantConfig.tenantId);
-    if (!sock?.user) throw new Error(`[Baileys] No active session for tenant ${tenantConfig.tenantId}`);
-
-    const result = await sock.sendMessage(jid, {
-      text: body,
-      footer: '',
-      buttons: buttons.map(btn => ({ buttonId: btn.id, buttonText: { displayText: btn.title }, type: 1 })),
-      headerType: 1,
-    });
-    logger.info({ phone }, '[Baileys] Interactive enviado');
-    return result;
+    const buttonsText = buttons.map((btn, i) => `${i + 1}. ${btn.title}`).join('\n');
+    const fullText = `${body}\n\n${buttonsText}`;
+    return sendBaileysTextMessage(tenantConfig.tenantId, phone, fullText);
   }
 
   const phoneNumberId = tenantConfig.whatsappPhoneNumberId || env.WHATSAPP_PHONE_NUMBER_ID;
@@ -161,16 +178,18 @@ function toParam(p) {
 async function sendTemplate(phone, templateName, params = [], tenantConfig = {}) {
   const provider = tenantConfig.provider || 'meta';
   
-  // Wasender doesn't use templates, convert to plain text + append confirmation link if available
-  if (provider === 'wasender') {
+  // Wasender and Baileys don't use templates — convert to plain text
+  if (provider === 'wasender' || provider === 'baileys') {
     let text = buildTemplateText(templateName, params);
-    // If buttons contain an appointmentId payload, append a confirmation link
     const buttons = Array.isArray(params) ? [] : (params?.buttons || []);
     const confirmBtn = buttons.find(b => b.payload?.startsWith('confirm_'));
     if (confirmBtn) {
       const appointmentId = confirmBtn.payload.replace('confirm_', '');
       const baseUrl = env.BASE_URL;
       text += `\n\n👉 Confirmá o cancelá tu turno aquí:\n${baseUrl}/c/${appointmentId}`;
+    }
+    if (provider === 'baileys') {
+      return sendBaileysTextMessage(tenantConfig.tenantId, phone, text);
     }
     return sendWasenderMessage(phone, text, tenantConfig.wasender_api_key);
   }
@@ -289,4 +308,7 @@ function buildTemplateText(templateName, params) {
   return bodyParams.join('\n');
 }
 
-module.exports = { sendTextMessage, sendInteractiveButtons, sendTemplate };
+module.exports = {
+  sendTextMessage, sendInteractiveButtons, sendTemplate,
+  renderTemplate, DEFAULT_REMINDER_TEMPLATE, DEFAULT_CONFIRMATION_TEMPLATE,
+};

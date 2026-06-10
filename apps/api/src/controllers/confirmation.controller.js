@@ -312,7 +312,8 @@ async function processAppointmentAction(req, res) {
       const icon = estado === 'confirmed' ? '✅' : '❌';
       const action = estado === 'confirmed' ? 'confirmó' : 'canceló';
       const tenantConfig = {
-        provider: tenant.whatsapp_provider || 'meta',
+        provider: tenant.whatsapp_provider || 'baileys',
+        tenantId: appointment.tenant_id,
         whatsappPhoneNumberId: tenant.whatsapp_phone_number_id,
         whatsappAccessToken: tenant.whatsapp_access_token,
         wasender_api_key: tenant.wasender_api_key,

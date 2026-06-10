@@ -87,6 +87,17 @@ const STEPS = [
     canSkip: true,
   },
 
+  // ── WhatsApp ──────────────────────────────────────────
+  {
+    id: 'settings-whatsapp',
+    route: '/settings',
+    selector: '[data-tour="settings-whatsapp"]',
+    position: 'top',
+    title: 'Conectar WhatsApp',
+    text: 'Escaneá el código QR con tu WhatsApp para activar el envío automático de mensajes. Una vez conectado, tus clientes recibirán confirmaciones y recordatorios desde tu propio número.',
+    canSkip: true,
+  },
+
   // ── Google Calendar ───────────────────────────────────
   {
     id: 'gcal-connect',

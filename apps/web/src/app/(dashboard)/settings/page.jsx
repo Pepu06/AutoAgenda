@@ -22,7 +22,7 @@ const DEFAULTS = {
   timeFormat: '24h',
   messagingEnabled: true,
   messageTemplate: '',
-  whatsappProvider: 'meta',
+  whatsappProvider: 'baileys',
   whatsappPhoneNumberId: '',
   whatsappAccessToken: '',
   wasenderApiKey: '',
@@ -38,6 +38,8 @@ const DEFAULTS = {
   confirmReplyMessage: '',
   cancelReplyMessage: '',
   baileysConnected: false,
+  reminderTemplate: '',
+  confirmationTemplate: '',
 };
 
 const WEEK_DAYS = [
@@ -105,6 +107,8 @@ export default function SettingsPage() {
       if (d.confirmReplyMessage != null) mapped.confirmReplyMessage = d.confirmReplyMessage;
       if (d.cancelReplyMessage  != null) mapped.cancelReplyMessage  = d.cancelReplyMessage;
       if (d.baileysConnected != null) mapped.baileysConnected = d.baileysConnected;
+      if (d.reminderTemplate != null) mapped.reminderTemplate = d.reminderTemplate;
+      if (d.confirmationTemplate != null) mapped.confirmationTemplate = d.confirmationTemplate;
       setSettings(s => ({ ...s, ...mapped }));
       isLoadedRef.current = true;
     }).catch(() => { }).finally(() => setLoading(false));
@@ -147,6 +151,8 @@ export default function SettingsPage() {
         location:      settings.location,
         confirm_reply_message: settings.confirmReplyMessage,
         cancel_reply_message:  settings.cancelReplyMessage,
+        reminder_template:     settings.reminderTemplate || null,
+        confirmation_template: settings.confirmationTemplate || null,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -280,48 +286,43 @@ export default function SettingsPage() {
       {/* MENSAJE */}
       <section className={styles.section} data-tour="settings-mensaje">
         <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>Mensaje</h2>
-          <p className={styles.sectionDesc}>Personalizá el texto que aparece en el mensaje de recordatorio</p>
+          <h2 className={styles.sectionTitle}>Mensajes</h2>
+          <p className={styles.sectionDesc}>Personalizá el texto completo de cada mensaje. Usá variables entre llaves dobles para insertar datos del turno.</p>
         </div>
         <div className={styles.fields}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
+            {['{{nombre}}','{{servicio}}','{{fecha}}','{{hora}}','{{ubicacion}}','{{negocio}}','{{recordatorio}}'].map(v => (
+              <code key={v} style={{ background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 4, fontSize: 12, cursor: 'default' }}>{v}</code>
+            ))}
+          </div>
           <Field
-            label="Mensaje personalizable"
-            hint="Aparece en el cuerpo del recordatorio. Podés usarlo para instrucciones, links o info extra."
+            label="Mensaje de confirmación"
+            hint="Se envía al crear un turno. El link de confirmación se agrega automáticamente al final."
           >
             <textarea
               className={styles.textarea}
-              value={settings.messageTemplate}
-              onChange={e => set('messageTemplate', e.target.value)}
-              rows={3}
-              placeholder="Ej: Recordá traer tu número de obra social."
+              value={settings.confirmationTemplate}
+              onChange={e => set('confirmationTemplate', e.target.value)}
+              rows={7}
+              placeholder={`✅ Confirmación de turno\n\nHola {{nombre}}, tu turno de {{servicio}} fue agendado para el {{fecha}} a las {{hora}}.\n📌 Ubicación: {{ubicacion}}\n\nTe enviaremos un recordatorio {{recordatorio}}.\n\n{{negocio}}`}
             />
           </Field>
-
-          {/* Vista previa */}
-          <Field label="Vista previa del mensaje">
-            <div className={styles.phonePreview}>
-              <div className={styles.phoneBar}>
-                <div className={styles.phoneAvatar}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M9.175 10.825Q8 9.65 8 8t1.175-2.825T12 4t2.825 1.175T16 8t-1.175 2.825T12 12t-2.825-1.175M4 20v-2.8q0-.85.438-1.562T5.6 14.55q1.55-.775 3.15-1.162T12 13t3.25.388t3.15 1.162q.725.375 1.163 1.088T20 17.2V20z" /></svg>
-                </div>
-                <span className={styles.phoneContact}>María García</span>
-              </div>
-              <div className={styles.phoneMessages}>
-                <div className={styles.phoneBubble}>
-                  <div className={styles.phoneBubbleHeader}>
-                    Recordatorio: {settings.businessName || 'tu negocio'}
-                  </div>
-                  <p>Hola María García, como estas? 👋</p>
-                  {settings.messageTemplate && (
-                    <p style={{ marginTop: 8, whiteSpace: 'pre-line' }}>{settings.messageTemplate}</p>
-                  )}
-                  <p style={{ marginTop: 8 }}>🗓️ El dia viernes 04-04, a las 10:30.</p>
-                  <p>📍 {settings.location || 'La dirección puesta en el evento'}</p>
-                  <p style={{ marginTop: 8 }}>Muchas gracias.</p>
-                  <p className={styles.phoneBubbleQuestion}>¿Deseas confirmar?</p>
-                </div>
-              </div>
-            </div>
+          <Field
+            label="Mensaje de recordatorio"
+            hint="Se envía el día anterior (o el mismo día) al turno. El link de confirmación se agrega automáticamente al final."
+          >
+            <textarea
+              className={styles.textarea}
+              value={settings.reminderTemplate}
+              onChange={e => set('reminderTemplate', e.target.value)}
+              rows={7}
+              placeholder={`📅 Recordatorio de turno con {{negocio}}\n\nHola {{nombre}}, ¿cómo estás? 👋\n\n📆 Fecha: {{fecha}}\n🕐 Hora: {{hora}}\n📌 Ubicación: {{ubicacion}}`}
+            />
+          </Field>
+          <Field label="">
+            <p style={{ fontSize: 12, color: 'var(--text-2)', margin: 0 }}>
+              💡 Si dejás el campo vacío se usa el mensaje predeterminado. El link <em>"Confirmá o cancelá tu turno aquí"</em> siempre se agrega al final.
+            </p>
           </Field>
         </div>
       </section>
@@ -514,92 +515,44 @@ export default function SettingsPage() {
       <section className={styles.section} data-tour="settings-whatsapp">
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>WhatsApp</h2>
-          <p className={styles.sectionDesc}>Configurá el proveedor de mensajería de WhatsApp</p>
+          <p className={styles.sectionDesc}>Conectá tu WhatsApp para enviar mensajes automáticos a tus clientes</p>
         </div>
         <div className={styles.fields}>
-          <Field label="Proveedor de WhatsApp">
-            <select
-              className={styles.select}
-              value={settings.whatsappProvider}
-              onChange={e => set('whatsappProvider', e.target.value)}
-            >
-              <option value="meta">Meta (oficial)</option>
-              <option value="wasender">WasenderAPI</option>
-              <option value="baileys">WhatsApp Propio (sin costo extra)</option>
-            </select>
-          </Field>
-
-          {settings.whatsappProvider === 'meta' && (
-            <>
-              <Field label="Phone Number ID">
-                <input
-                  className={styles.input}
-                  value={settings.whatsappPhoneNumberId}
-                  onChange={e => set('whatsappPhoneNumberId', e.target.value)}
-                  placeholder="Ej: 123456789012345"
-                />
-              </Field>
-              <Field label="Access Token">
-                <input
-                  className={styles.input}
-                  value={settings.whatsappAccessToken}
-                  onChange={e => set('whatsappAccessToken', e.target.value)}
-                  placeholder="EAABwzLixnjYBO..."
-                  type="password"
-                />
-              </Field>
-            </>
-          )}
-
-          {settings.whatsappProvider === 'wasender' && (
-            <Field label="WasenderAPI Key">
-              <input
-                className={styles.input}
-                value={settings.wasenderApiKey}
-                onChange={e => set('wasenderApiKey', e.target.value)}
-                placeholder="Tu API key de WasenderAPI"
-                type="password"
-              />
-            </Field>
-          )}
-
-          {settings.whatsappProvider === 'baileys' && (
-            <Field label="Conexión WhatsApp">
-              {settings.baileysConnected ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ color: '#22c55e', fontWeight: 600 }}>● Conectado</span>
+          <Field label="Conexión WhatsApp">
+            {settings.baileysConnected ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ color: '#22c55e', fontWeight: 600 }}>● Conectado</span>
+                <button
+                  className={styles.btnDanger}
+                  onClick={handleBaileysDisconnect}
+                  type="button"
+                >
+                  Desconectar
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                  Escaneá el código QR con tu WhatsApp para conectar tu número. El código expira cada 20 segundos y se actualiza automáticamente.
+                </p>
+                {qrError && (
+                  <p style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px' }}>{qrError}</p>
+                )}
+                {qrImage ? (
+                  <img src={qrImage} alt="QR WhatsApp" style={{ width: '200px', height: '200px', borderRadius: '8px', display: 'block' }} />
+                ) : (
                   <button
-                    className={styles.btnDanger}
-                    onClick={handleBaileysDisconnect}
+                    className={styles.btnSave}
+                    onClick={startQRScan}
+                    disabled={qrLoading}
                     type="button"
                   >
-                    Desconectar
+                    {qrLoading ? 'Generando QR...' : 'Conectar WhatsApp'}
                   </button>
-                </div>
-              ) : (
-                <div>
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                    Escaneá el código QR con tu WhatsApp para conectar tu número. El código expira cada 20 segundos y se actualiza automáticamente.
-                  </p>
-                  {qrError && (
-                    <p style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px' }}>{qrError}</p>
-                  )}
-                  {qrImage ? (
-                    <img src={qrImage} alt="QR WhatsApp" style={{ width: '200px', height: '200px', borderRadius: '8px', display: 'block' }} />
-                  ) : (
-                    <button
-                      className={styles.btnSave}
-                      onClick={startQRScan}
-                      disabled={qrLoading}
-                      type="button"
-                    >
-                      {qrLoading ? 'Generando QR...' : 'Conectar WhatsApp'}
-                    </button>
-                  )}
-                </div>
-              )}
-            </Field>
-          )}
+                )}
+              </div>
+            )}
+          </Field>
         </div>
       </section>
 

@@ -59,7 +59,7 @@ async function sendFollowUp({ appointmentId }) {
   const ubicacion = appointment.tenant?.location || '';
 
   const tenantConfig = {
-    provider: appointment.tenant?.whatsapp_provider || 'meta',
+    provider: appointment.tenant?.whatsapp_provider || 'baileys',
     tenantId: appointment.tenant_id,
     whatsappPhoneNumberId: appointment.tenant?.whatsapp_phone_number_id,
     whatsappAccessToken: appointment.tenant?.whatsapp_access_token,

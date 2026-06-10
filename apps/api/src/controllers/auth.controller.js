@@ -51,7 +51,7 @@ async function register(req, res, next) {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const { data: tenant, error: tenantErr } = await supabase
-      .from('tenants').insert({ name: tenantName }).select().single();
+      .from('tenants').insert({ name: tenantName, whatsapp_provider: 'baileys', messaging_enabled: true }).select().single();
     if (tenantErr) throw tenantErr;
 
     const { data: user, error: userErr } = await supabase
@@ -118,7 +118,7 @@ async function googleAuth(req, res, next) {
 
     // New user — auto-create tenant
     const { data: tenant, error: tenantErr } = await supabase
-      .from('tenants').insert({ name: name || email }).select().single();
+      .from('tenants').insert({ name: name || email, whatsapp_provider: 'baileys', messaging_enabled: true }).select().single();
     if (tenantErr) throw tenantErr;
 
     const { data: newUser, error: userErr } = await supabase

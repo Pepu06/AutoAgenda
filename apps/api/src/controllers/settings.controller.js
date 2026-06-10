@@ -3,7 +3,7 @@ const { AppError } = require('../errors');
 
 const ALLOWED_FIELDS = [
   'business_name', 'timezone', 'time_format',
-  'messaging_enabled', 'message_template',
+  'messaging_enabled', 'message_template', 'reminder_template', 'confirmation_template',
   'whatsapp_provider', 'whatsapp_phone_number_id', 'whatsapp_access_token', 'wasender_api_key',
   'admin_whatsapp', 'admin_alerts_enabled', 'admin_daily_report_time',
   'reminder_type', 'reminder_time',
@@ -49,22 +49,13 @@ async function updateSettings(req, res, next) {
     if (updates.messaging_enabled === true) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('business_name, message_template')
+        .select('business_name')
         .eq('id', req.tenantId)
         .single();
 
-      const missing = [];
       const businessName = String(updates.business_name || tenant?.business_name || '').trim();
-      const messageTemplate = String(updates.message_template || tenant?.message_template || '').trim();
-
-      if (!businessName) missing.push('Nombre del negocio');
-      if (!messageTemplate) missing.push('Mensaje personalizable');
-
-      if (missing.length > 0) {
-        throw new AppError(
-          `Para activar el motor de mensajes, completá primero: ${missing.join(', ')}.`,
-          400
-        );
+      if (!businessName) {
+        throw new AppError('Para activar el motor de mensajes, completá primero el Nombre del negocio.', 400);
       }
     }
 
@@ -126,7 +117,7 @@ async function getOnboarding(req, res, next) {
       google_calendar:  { done: Boolean(user?.google_refresh_token) },
       calendar_format:  { done: (tenant.onboarding_step || 0) >= 3 },
       first_service:    { done: serviceCount > 0 },
-      message_template: { done: Boolean(String(tenant.message_template || '').trim()) },
+      message_template: { done: true },
       autoagenda:       { done: tenant.autoagenda_enabled === true },
       enable_messaging: { done: tenant.messaging_enabled === true },
     };

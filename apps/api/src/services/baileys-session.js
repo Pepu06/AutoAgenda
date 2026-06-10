@@ -3,13 +3,14 @@ const {
   default: makeWASocket,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  Browsers,
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const { supabase } = require('@autoagenda/db');
 const { useSupabaseAuthState } = require('./baileys-auth-state');
 const logger = require('../config/logger');
 
-// tenantId -> { socket, qrCallbacks: Set<fn>, statusCallbacks: Set<fn>, lastQR: string|null }
+// tenantId -> { socket, reconnectScheduled: bool, qrCallbacks: Set<fn>, statusCallbacks: Set<fn>, lastQR: string|null }
 const sessions = new Map();
 const stoppedIntentionally = new Set();
 
@@ -18,16 +19,20 @@ async function startSession(tenantId) {
   if (sessions.has(tenantId)) {
     const existing = sessions.get(tenantId);
     if (existing.socket?.user) return existing.socket; // already connected
-    // If socket is null, a reconnect is already in progress — reuse the entry so callbacks survive
-    if (existing.socket === null) return null;
+    // If socket is null, a reconnect is already in progress — unless WE scheduled it
+    if (existing.socket === null) {
+      if (!existing.reconnectScheduled) return null;
+      existing.reconnectScheduled = false; // clear: this IS the scheduled reconnect
+    } else {
     // Stale socket with no user — close it but keep callbacks
-    try { existing.socket.end(undefined); } catch (_) {}
-    existing.socket = null;
-    existing.lastQR = null;
+      try { existing.socket.end(undefined); } catch (_) {}
+      existing.socket = null;
+      existing.lastQR = null;
+    }
   }
 
   // Reuse existing entry (preserves qrCallbacks/statusCallbacks across reconnects) or create new
-  const entry = sessions.get(tenantId) || { socket: null, qrCallbacks: new Set(), statusCallbacks: new Set(), lastQR: null };
+  const entry = sessions.get(tenantId) || { socket: null, reconnectScheduled: false, qrCallbacks: new Set(), statusCallbacks: new Set(), lastQR: null };
   if (!sessions.has(tenantId)) sessions.set(tenantId, entry);
 
   const { state, saveCreds } = await useSupabaseAuthState(tenantId);
@@ -38,7 +43,7 @@ async function startSession(tenantId) {
     auth: state,
     printQRInTerminal: false,
     logger: logger.child({ baileys: tenantId, level: 'warn' }),
-    browser: ['RecordAI', 'Chrome', '1.0'],
+    browser: Browsers.ubuntu('Chrome'),
   });
 
   entry.socket = sock;
@@ -91,7 +96,10 @@ async function startSession(tenantId) {
           // Was actually in use — tell frontend it dropped
           for (const cb of entry.statusCallbacks) cb('disconnected');
         }
-        setTimeout(() => startSession(tenantId), 5000);
+        // 515 = restartRequired (normal after pairing) — reconnect immediately so WA doesn't timeout
+        const delay = reason === DisconnectReason.restartRequired ? 0 : 5000;
+        entry.reconnectScheduled = true;
+        setTimeout(() => startSession(tenantId), delay);
       }
     }
   });

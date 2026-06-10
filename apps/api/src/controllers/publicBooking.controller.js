@@ -333,7 +333,8 @@ async function createBooking(req, res, next) {
         const timeLabel = slotDate.toLocaleTimeString('es-AR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }) + ' hs';
 
         const tenantConfig = {
-          provider:              tenant.whatsapp_provider || 'meta',
+          provider:              tenant.whatsapp_provider || 'baileys',
+          tenantId:              tenant.id,
           whatsappPhoneNumberId: tenant.whatsapp_phone_number_id,
           whatsappAccessToken:   tenant.whatsapp_access_token,
           wasender_api_key:      tenant.wasender_api_key,

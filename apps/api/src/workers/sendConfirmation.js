@@ -1,5 +1,6 @@
 const { supabase } = require('@autoagenda/db');
-const { sendTemplate } = require('../services/whatsapp');
+const { sendTextMessage, renderTemplate, DEFAULT_CONFIRMATION_TEMPLATE } = require('../services/whatsapp');
+const env = require('../config/env');
 const { getCalendarEvent, refreshAccessToken } = require('../services/google');
 const logger = require('../config/logger');
 const { formatTime } = require('../utils/datetime');
@@ -8,7 +9,7 @@ const { checkUsageLimit } = require('../middleware/checkUsage');
 async function sendConfirmation({ appointmentId }) {
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('*, contact:contacts(name, phone), service:services(name), tenant:tenants(timezone, time_format, business_name, reminder_type, messaging_enabled, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode)')
+    .select('*, contact:contacts(name, phone), service:services(name), tenant:tenants(timezone, time_format, business_name, reminder_type, messaging_enabled, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode, confirmation_template)')
     .eq('id', appointmentId)
     .maybeSingle();
 
@@ -76,26 +77,29 @@ async function sendConfirmation({ appointmentId }) {
 
   // Configuración del proveedor de WhatsApp
   const tenantConfig = {
-    provider: appointment.tenant?.whatsapp_provider || 'meta',
+    provider: appointment.tenant?.whatsapp_provider || 'baileys',
     tenantId: appointment.tenant_id,
     whatsappPhoneNumberId: appointment.tenant?.whatsapp_phone_number_id,
     whatsappAccessToken: appointment.tenant?.whatsapp_access_token,
     wasender_api_key: appointment.tenant?.wasender_api_key,
   };
+
+  const tmpl = appointment.tenant?.confirmation_template || DEFAULT_CONFIRMATION_TEMPLATE;
+  const rendered = renderTemplate(tmpl, {
+    nombre:      appointment.contact.name,
+    servicio:    appointment.service.name,
+    fecha:       diaLabel,
+    hora:        horaLabel,
+    ubicacion,
+    negocio:     appointment.tenant?.business_name || '',
+    recordatorio: recordatorioTexto,
+  });
+  const confirmLink = `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointmentId}`;
+  const fullText = rendered + confirmLink;
+
+  const whatsappResponse = await sendTextMessage(appointment.contact.phone, fullText, tenantConfig);
   
-  const whatsappResponse = await sendTemplate(appointment.contact.phone, 'confirmacion_turno', {
-    body: [
-      appointment.contact.name,
-      recordatorioTexto,
-      diaLabel,
-      horaLabel,
-      appointment.service.name,
-      appointment.tenant?.business_name || '',
-      ubicacion,
-    ],
-  }, tenantConfig);
-  
-  const waMessageId = whatsappResponse?.messages?.[0]?.id || null;
+  const waMessageId = whatsappResponse?.messages?.[0]?.id || whatsappResponse?.key?.id || null;
   
   const { error: updateError } = await supabase
     .from('appointments')

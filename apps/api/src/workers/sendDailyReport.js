@@ -20,7 +20,7 @@ async function sendDailyReport({ tenantId, reportType }) {
   }
 
   const tenantConfig = {
-    provider: tenant.whatsapp_provider || 'meta',
+    provider: tenant.whatsapp_provider || 'baileys',
     tenantId,
     whatsappPhoneNumberId: tenant.whatsapp_phone_number_id,
     whatsappAccessToken: tenant.whatsapp_access_token,

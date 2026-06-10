@@ -3,7 +3,7 @@ const logger = require('../config/logger');
 const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor, createCalendarEvent, listCalendars, watchCalendar, stopCalendarWatch } = require('../services/google');
 const env = require('../config/env');
 const crypto = require('crypto');
-const { sendTemplate } = require('../services/whatsapp');
+const { sendTemplate, sendTextMessage, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
 const { appointmentsQueue } = require('../workers/queue');
 const { trackMessageSent } = require('../workers/usageTracking');
 const { checkUsageLimit } = require('../middleware/checkUsage');
@@ -100,12 +100,10 @@ function extractFromTitle(summary = '') {
 }
 
 function hasReminderConfig(tenant) {
-  const businessName = String(tenant?.business_name || '').trim();
-  const messageTemplate = String(tenant?.message_template || '').trim();
-  return Boolean(businessName && messageTemplate);
+  return Boolean(String(tenant?.business_name || '').trim());
 }
 
-const REMINDER_CONFIG_ERROR = 'Completá Nombre del negocio y Mensaje personalizable en Configuración para poder crear citas y enviar recordatorios.';
+const REMINDER_CONFIG_ERROR = 'Completá el Nombre del negocio en Configuración para poder crear citas y enviar recordatorios.';
 
 /**
  * Returns the owner's chosen default calendar ID for a tenant.
@@ -523,7 +521,7 @@ async function remindEvent(req, res, next) {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('business_name, message_template, timezone, time_format, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode')
+      .select('business_name, message_template, reminder_template, timezone, time_format, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode')
       .eq('id', req.tenantId)
       .single();
 
@@ -546,35 +544,31 @@ async function remindEvent(req, res, next) {
       })
       : '';
 
-    const encabezado = tenant?.business_name;
-    const mensajeEditable = (tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ');
+    const encabezado = tenant?.business_name || '';
     const ubicacion = (tenant?.location_mode === 'calendar' && event?.location)
       ? event.location
       : (tenant?.location || '');
 
     const tenantConfig = {
-      provider: tenant?.whatsapp_provider || 'meta',
+      provider: tenant?.whatsapp_provider || 'baileys',
+      tenantId: req.tenantId,
       whatsappPhoneNumberId: tenant?.whatsapp_phone_number_id,
       whatsappAccessToken: tenant?.whatsapp_access_token,
       wasender_api_key: tenant?.wasender_api_key,
     };
 
-    await sendTemplate(phone, 'recordatorio_turno', {
-      header: [{ name: 'encabezado', value: encabezado }],
-      body: [
-        { name: 'nombre_cliente',   value: clientName },
-        { name: 'mensaje_editable', value: mensajeEditable },
-        { name: 'fecha',            value: fechaLabel },
-        { name: 'hora',             value: horaLabel },
-        { name: 'ubicacion',        value: ubicacion },
-      ],
-      ...(appointment?.id ? {
-        buttons: [
-          { index: 0, payload: `confirm_${appointment.id}` },
-          { index: 1, payload: `cancel_${appointment.id}` },
-        ],
-      } : {}),
-    }, tenantConfig);
+    const tmpl = tenant?.reminder_template || DEFAULT_REMINDER_TEMPLATE;
+    const rendered = renderTemplate(tmpl, {
+      nombre: clientName,
+      fecha:  fechaLabel,
+      hora:   horaLabel,
+      ubicacion,
+      negocio: encabezado,
+    });
+    const confirmLink = appointment?.id
+      ? `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointment.id}`
+      : '';
+    await sendTextMessage(phone, rendered + confirmLink, tenantConfig);
 
     await trackMessageSent(req.tenantId, 'reminder');
 

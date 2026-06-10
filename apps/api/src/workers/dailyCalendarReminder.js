@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { supabase } = require('@autoagenda/db');
-const { sendTemplate } = require('../services/whatsapp');
+const { sendTextMessage, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
 const { getCalendarEvent } = require('../services/google');
 const { getValidToken } = require('../controllers/calendar.controller');
 const logger = require('../config/logger');
@@ -9,11 +9,10 @@ const { appointmentsQueue } = require('./queue');
 const { trackMessageSent } = require('./usageTracking');
 const { checkUsageLimit } = require('../middleware/checkUsage');
 const { JobName } = require('@autoagenda/shared');
+const env = require('../config/env');
 
 function hasReminderConfig(tenant) {
-  const businessName = String(tenant?.business_name || '').trim();
-  const messageTemplate = String(tenant?.message_template || '').trim();
-  return Boolean(businessName && messageTemplate);
+  return Boolean(String(tenant?.business_name || '').trim());
 }
 
 function getReminderDateTimeUTC(scheduledAt, timezone, reminderType, reminderTime) {
@@ -135,7 +134,7 @@ async function runDailyReminders() {
       google_event_id,
       contact:contacts(name, phone),
       service:services(name),
-      tenant:tenants(business_name, message_template, messaging_enabled, timezone, time_format, reminder_type, reminder_time, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode)
+      tenant:tenants(business_name, message_template, reminder_template, messaging_enabled, timezone, time_format, reminder_type, reminder_time, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode)
     `)
     .in('status', ['pending', 'notified', 'sin_enviar'])
     .is('reminder_sent_at', null)
@@ -172,7 +171,7 @@ async function runDailyReminders() {
     const ubicacion = appt.tenant?.location || '';
 
     const tenantConfig = {
-      provider: appt.tenant?.whatsapp_provider || 'meta',
+      provider: appt.tenant?.whatsapp_provider || 'baileys',
       tenantId: appt.tenant_id,
       whatsappPhoneNumberId: appt.tenant?.whatsapp_phone_number_id,
       whatsappAccessToken: appt.tenant?.whatsapp_access_token,
@@ -234,22 +233,20 @@ async function runDailyReminders() {
       }
 
       // Now send the reminder
-      const whatsappResponse = await sendTemplate(appt.contact.phone, 'recordatorio_turno', {
-        header: [{ name: 'encabezado', value: encabezado }],
-        body: [
-          { name: 'nombre_cliente',   value: appt.contact.name || 'Cliente' },
-          { name: 'mensaje_editable', value: mensajeEditable },
-          { name: 'fecha',            value: fechaLabel },
-          { name: 'hora',             value: horaLabel },
-          { name: 'ubicacion',        value: ubicacion },
-        ],
-        buttons: [
-          { index: 0, payload: `confirm_${appt.id}` },
-          { index: 1, payload: `cancel_${appt.id}` },
-        ],
-      }, tenantConfig);
+      const tmpl = appt.tenant?.reminder_template || DEFAULT_REMINDER_TEMPLATE;
+      const rendered = renderTemplate(tmpl, {
+        nombre:    appt.contact.name || 'Cliente',
+        fecha:     fechaLabel,
+        hora:      horaLabel,
+        ubicacion,
+        negocio:   encabezado,
+      });
+      const confirmLink = `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appt.id}`;
+      const fullText = rendered + confirmLink;
 
-      const waMessageId = whatsappResponse?.messages?.[0]?.id || null;
+      const whatsappResponse = await sendTextMessage(appt.contact.phone, fullText, tenantConfig);
+
+      const waMessageId = whatsappResponse?.messages?.[0]?.id || whatsappResponse?.key?.id || null;
 
       await trackMessageSent(appt.tenant_id, 'reminder');
 

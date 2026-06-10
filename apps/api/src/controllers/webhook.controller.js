@@ -153,7 +153,8 @@ async function processMessage(message, _metadata) {
 
     const clientPhone = from.startsWith('+') ? from : `+${from}`;
     const tenantConfig = {
-      provider: replyTenant.whatsapp_provider || 'meta',
+      provider: replyTenant.whatsapp_provider || 'baileys',
+      tenantId: appointment.tenant_id,
       whatsappPhoneNumberId: replyTenant.whatsapp_phone_number_id,
       whatsappAccessToken: replyTenant.whatsapp_access_token,
       wasender_api_key: replyTenant.wasender_api_key,
@@ -188,7 +189,8 @@ async function processMessage(message, _metadata) {
         const rawPhone = fullAppt.contact.phone.replace(/^\+?549?/, '');
 
         const tenantConfig = {
-          provider: tenant.whatsapp_provider || 'meta',
+          provider: tenant.whatsapp_provider || 'baileys',
+          tenantId: appointment.tenant_id,
           whatsappPhoneNumberId: tenant.whatsapp_phone_number_id,
           whatsappAccessToken: tenant.whatsapp_access_token,
           wasender_api_key: tenant.wasender_api_key,
@@ -282,7 +284,8 @@ async function handleDailyReportRequest(phone, tenantId, reportType) {
 
   const tz = tenant.timezone || 'America/Argentina/Buenos_Aires';
   const tenantConfig = {
-    provider: tenant.whatsapp_provider || 'meta',
+    provider: tenant.whatsapp_provider || 'baileys',
+    tenantId: tenantId,
     whatsappPhoneNumberId: tenant.whatsapp_phone_number_id,
     whatsappAccessToken: tenant.whatsapp_access_token,
     wasender_api_key: tenant.wasender_api_key,
