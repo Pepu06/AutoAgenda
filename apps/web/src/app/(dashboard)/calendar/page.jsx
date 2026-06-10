@@ -86,6 +86,18 @@ export default function CalendarPage() {
   const [services, setServices]       = useState([]);
   const [locationMode, setLocationMode] = useState('fixed');
 
+  // Inline create contact
+  const [showNewContact, setShowNewContact] = useState(false);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactSaving, setNewContactSaving] = useState(false);
+
+  // Inline create service
+  const [showNewService, setShowNewService] = useState(false);
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServiceDuration, setNewServiceDuration] = useState('30');
+  const [newServiceSaving, setNewServiceSaving] = useState(false);
+
   // Default calendar state
   const [calendars, setCalendars]               = useState([]);
   const [defaultCalendarId, setDefaultCalendarId] = useState('primary');
@@ -195,6 +207,44 @@ export default function CalendarPage() {
     setEvents([]);
   }
 
+  async function handleCreateContact(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setNewContactSaving(true);
+    try {
+      const res = await api.post('/contacts', { name: newContactName, phone: newContactPhone });
+      const created = res.data;
+      setContacts(prev => [...prev, created]);
+      setCreateForm(f => ({ ...f, contactId: created.id }));
+      setShowNewContact(false);
+      setNewContactName('');
+      setNewContactPhone('');
+    } catch (err) {
+      alert(err.message || 'Error al crear contacto');
+    } finally {
+      setNewContactSaving(false);
+    }
+  }
+
+  async function handleCreateService(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setNewServiceSaving(true);
+    try {
+      const res = await api.post('/services', { name: newServiceName, durationMinutes: Number(newServiceDuration) });
+      const created = res.data;
+      setServices(prev => [...prev, created]);
+      setCreateForm(f => ({ ...f, serviceId: created.id }));
+      setShowNewService(false);
+      setNewServiceName('');
+      setNewServiceDuration('30');
+    } catch (err) {
+      alert(err.message || 'Error al crear servicio');
+    } finally {
+      setNewServiceSaving(false);
+    }
+  }
+
   async function openCreate() {
     if (blockedDates[selectedDate]) {
       alert('Este día está bloqueado. Desbloquealo antes de crear una cita.');
@@ -214,6 +264,10 @@ export default function CalendarPage() {
     setCreateYear(parts[0]); setCreateMonth(parts[1]); setCreateDay(parts[2]);
     setCreateHour('09'); setCreateMin('00');
     setCreateError('');
+    setShowNewContact(false);
+    setShowNewService(false);
+    setNewContactName(''); setNewContactPhone('');
+    setNewServiceName(''); setNewServiceDuration('30');
     setShowCreate(true);
   }
 
@@ -652,25 +706,87 @@ export default function CalendarPage() {
             </div>
             <form onSubmit={handleCreateEvent} className={styles.popupBody} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Contacto</label>
-                <ContactSearch
-                  contacts={contacts}
-                  value={createForm.contactId}
-                  onChange={id => setCreateForm(f => ({ ...f, contactId: id }))}
-                  required
-                />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Contacto</label>
+                  <button type="button" onClick={() => { setShowNewContact(v => !v); setShowNewService(false); }}
+                    style={{ fontSize: 11, fontWeight: 700, color: '#7C6EF8', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>
+                    {showNewContact ? '✕ Cancelar' : '+ Nuevo'}
+                  </button>
+                </div>
+                {showNewContact ? (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Nombre"
+                      value={newContactName}
+                      onChange={e => setNewContactName(e.target.value)}
+                      style={{ flex: 2, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
+                    />
+                    <input
+                      type="tel"
+                      placeholder="+549..."
+                      value={newContactPhone}
+                      onChange={e => setNewContactPhone(e.target.value)}
+                      style={{ flex: 2, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
+                    />
+                    <button type="button" onClick={handleCreateContact} disabled={newContactSaving || !newContactName || !newContactPhone}
+                      style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: '#7C6EF8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, opacity: newContactSaving ? 0.6 : 1 }}>
+                      {newContactSaving ? '...' : 'Crear'}
+                    </button>
+                  </div>
+                ) : (
+                  <ContactSearch
+                    contacts={contacts}
+                    value={createForm.contactId}
+                    onChange={id => setCreateForm(f => ({ ...f, contactId: id }))}
+                    required
+                  />
+                )}
               </div>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Servicio</label>
-                <select
-                  required
-                  value={createForm.serviceId}
-                  onChange={e => setCreateForm(f => ({ ...f, serviceId: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 32px 8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14, appearance: 'none', WebkitAppearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238b8fa8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}
-                >
-                  <option value="">Seleccionar servicio...</option>
-                  {services.map(s => <option key={s.id} value={s.id}>{s.name} ({s.durationMinutes} min)</option>)}
-                </select>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Servicio</label>
+                  <button type="button" onClick={() => { setShowNewService(v => !v); setShowNewContact(false); }}
+                    style={{ fontSize: 11, fontWeight: 700, color: '#7C6EF8', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>
+                    {showNewService ? '✕ Cancelar' : '+ Nuevo'}
+                  </button>
+                </div>
+                {showNewService ? (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Nombre del servicio"
+                      value={newServiceName}
+                      onChange={e => setNewServiceName(e.target.value)}
+                      style={{ flex: 3, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
+                    />
+                    <input
+                      type="number"
+                      min="5"
+                      max="480"
+                      placeholder="Min"
+                      value={newServiceDuration}
+                      onChange={e => setNewServiceDuration(e.target.value)}
+                      style={{ flex: 1, padding: '7px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 13 }}
+                    />
+                    <button type="button" onClick={handleCreateService} disabled={newServiceSaving || !newServiceName || !newServiceDuration}
+                      style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: '#7C6EF8', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, opacity: newServiceSaving ? 0.6 : 1 }}>
+                      {newServiceSaving ? '...' : 'Crear'}
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={createForm.serviceId}
+                    onChange={e => setCreateForm(f => ({ ...f, serviceId: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 32px 8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14, appearance: 'none', WebkitAppearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238b8fa8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}
+                  >
+                    <option value="">Seleccionar servicio...</option>
+                    {services.map(s => <option key={s.id} value={s.id}>{s.name} ({s.durationMinutes} min)</option>)}
+                  </select>
+                )}
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Fecha</label>
