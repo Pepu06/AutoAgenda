@@ -77,6 +77,7 @@ async function sendConfirmation({ appointmentId }) {
   // Configuración del proveedor de WhatsApp
   const tenantConfig = {
     provider: appointment.tenant?.whatsapp_provider || 'meta',
+    tenantId: appointment.tenant_id,
     whatsappPhoneNumberId: appointment.tenant?.whatsapp_phone_number_id,
     whatsappAccessToken: appointment.tenant?.whatsapp_access_token,
     wasender_api_key: appointment.tenant?.wasender_api_key,

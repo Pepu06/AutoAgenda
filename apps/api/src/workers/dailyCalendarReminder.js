@@ -173,6 +173,7 @@ async function runDailyReminders() {
 
     const tenantConfig = {
       provider: appt.tenant?.whatsapp_provider || 'meta',
+      tenantId: appt.tenant_id,
       whatsappPhoneNumberId: appt.tenant?.whatsapp_phone_number_id,
       whatsappAccessToken: appt.tenant?.whatsapp_access_token,
       wasender_api_key: appt.tenant?.wasender_api_key,

@@ -1,6 +1,7 @@
 const axios = require('axios');
 const logger = require('../config/logger');
 const env = require('../config/env');
+const { getSocket } = require('./baileys-session');
 
 const META_MESSAGES_URL = `https://graph.facebook.com/v21.0/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 const WASENDER_API_URL = 'https://wasenderapi.com/api/send-message';
@@ -17,8 +18,23 @@ async function sendTextMessage(phone, text, tenantConfig = {}) {
   if (provider === 'wasender') {
     return sendWasenderMessage(phone, text, tenantConfig.wasender_api_key);
   }
-  
+
+  if (provider === 'baileys') {
+    return sendBaileysTextMessage(tenantConfig.tenantId, phone, text);
+  }
+
   return sendMetaTextMessage(phone, text, tenantConfig);
+}
+
+async function sendBaileysTextMessage(tenantId, phone, text) {
+  const sock = getSocket(tenantId);
+  if (!sock?.user) throw new Error(`[Baileys] No active session for tenant ${tenantId}`);
+
+  // Baileys expects JID format: phone@s.whatsapp.net (strip leading +)
+  const jid = phone.replace(/^\+/, '') + '@s.whatsapp.net';
+  const result = await sock.sendMessage(jid, { text });
+  logger.info({ tenantId, phone, messageId: result?.key?.id }, '[Baileys] Mensaje enviado');
+  return result;
 }
 
 async function sendWasenderMessage(phone, text, token) {
@@ -77,6 +93,21 @@ async function sendInteractiveButtons(phone, body, buttons, tenantConfig = {}) {
     const buttonsText = buttons.map((btn, i) => `${i + 1}. ${btn.title}`).join('\n');
     const fullText = `${body}\n\n${buttonsText}`;
     return sendWasenderMessage(phone, fullText, tenantConfig.wasender_api_key);
+  }
+
+  if (provider === 'baileys') {
+    const jid = phone.replace(/^\+/, '') + '@s.whatsapp.net';
+    const sock = getSocket(tenantConfig.tenantId);
+    if (!sock?.user) throw new Error(`[Baileys] No active session for tenant ${tenantConfig.tenantId}`);
+
+    const result = await sock.sendMessage(jid, {
+      text: body,
+      footer: '',
+      buttons: buttons.map(btn => ({ buttonId: btn.id, buttonText: { displayText: btn.title }, type: 1 })),
+      headerType: 1,
+    });
+    logger.info({ phone }, '[Baileys] Interactive enviado');
+    return result;
   }
 
   const phoneNumberId = tenantConfig.whatsappPhoneNumberId || env.WHATSAPP_PHONE_NUMBER_ID;
