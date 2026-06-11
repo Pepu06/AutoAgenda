@@ -53,8 +53,13 @@ export default function ContactsPage() {
 
   async function handleDelete(id) {
     if (!confirm('¿Eliminar contacto?')) return;
-    await api.delete(`/contacts/${id}`);
-    fetchContacts();
+    setError('');
+    try {
+      await api.delete(`/contacts/${id}`);
+      fetchContacts();
+    } catch (err) {
+      setError(err.message || 'No se pudo eliminar el contacto.');
+    }
   }
 
   return (

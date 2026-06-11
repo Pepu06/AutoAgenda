@@ -85,7 +85,44 @@ async function remove(req, res, next) {
       .from('contacts').select('id').eq('id', req.params.id).eq('tenant_id', req.tenantId).maybeSingle();
     if (!existing) throw new NotFoundError('Contact not found');
 
-    const { error } = await supabase.from('contacts').delete().eq('id', req.params.id);
+    const { data: appointments, error: appointmentsError } = await supabase
+      .from('appointments')
+      .select('id, scheduled_at')
+      .eq('tenant_id', req.tenantId)
+      .eq('contact_id', req.params.id);
+
+    if (appointmentsError) throw appointmentsError;
+
+    const now = new Date();
+    const hasFutureAppointments = (appointments || []).some((appt) => {
+      if (!appt?.scheduled_at) return true;
+      return new Date(appt.scheduled_at) >= now;
+    });
+
+    if (hasFutureAppointments) {
+      return res.status(409).json({
+        success: false,
+        error: 'No se puede eliminar el contacto porque tiene turnos futuros asociados.',
+      });
+    }
+
+    // Si todos los turnos son pasados, se eliminan antes de borrar el contacto.
+    if ((appointments || []).length > 0) {
+      const { error: deleteAppointmentsError } = await supabase
+        .from('appointments')
+        .delete()
+        .eq('tenant_id', req.tenantId)
+        .eq('contact_id', req.params.id)
+        .lt('scheduled_at', now.toISOString());
+
+      if (deleteAppointmentsError) throw deleteAppointmentsError;
+    }
+
+    const { error } = await supabase
+      .from('contacts')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('tenant_id', req.tenantId);
     if (error) throw error;
     return res.json({ success: true, data: null });
   } catch (err) { return next(err); }
