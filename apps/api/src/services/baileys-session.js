@@ -42,12 +42,9 @@ async function startSession(tenantId) {
     version,
     auth: state,
     printQRInTerminal: false,
-    // Send-only mode: avoid chat/history synchronization while keeping
-    // the authenticated socket available for outbound messages.
     fireInitQueries: false,
     markOnlineOnConnect: false,
     syncFullHistory: false,
-    shouldSyncHistoryMessage: () => false,
     logger: logger.child({ baileys: tenantId, level: 'warn' }),
     browser: Browsers.ubuntu('Chrome'),
   });
