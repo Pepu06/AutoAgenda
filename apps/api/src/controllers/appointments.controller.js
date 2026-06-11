@@ -68,7 +68,7 @@ async function create(req, res, next) {
     const queueJob = (name, opts = {}) =>
       appointmentsQueue.add(name, { appointmentId: data.id }, opts).catch(() => {});
 
-    queueJob(JobName.SEND_CONFIRMATION, { delay: 10000, attempts: 5, backoff: { type: 'exponential', delay: 8000 } });
+    queueJob(JobName.SEND_CONFIRMATION, { attempts: 5, backoff: { type: 'exponential', delay: 8000 } });
 
     return res.status(201).json({ success: true, data: convertKeys(data) });
   } catch (err) { return next(err); }

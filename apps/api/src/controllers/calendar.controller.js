@@ -351,7 +351,7 @@ async function runCalendarSync(userId, tenantId) {
     }).select('id').single();
     if (appointment) {
       syncedIds.add(event.id);
-      appointmentsQueue.add(JobName.SEND_CONFIRMATION, { appointmentId: appointment.id }, { delay: 10000, attempts: 5, backoff: { type: 'exponential', delay: 8000 } }).catch(() => {});
+      appointmentsQueue.add(JobName.SEND_CONFIRMATION, { appointmentId: appointment.id }, { attempts: 5, backoff: { type: 'exponential', delay: 8000 } }).catch(() => {});
       created++;
     }
   }
@@ -649,7 +649,7 @@ async function createEvent(req, res, next) {
     const queueJob = (name, opts = {}) =>
       appointmentsQueue.add(name, { appointmentId: appointment.id }, opts).catch(() => { });
 
-    queueJob(JobName.SEND_CONFIRMATION, { delay: 10000, attempts: 5, backoff: { type: 'exponential', delay: 8000 } });
+    queueJob(JobName.SEND_CONFIRMATION, { attempts: 5, backoff: { type: 'exponential', delay: 8000 } });
 
     return res.status(201).json({ success: true, data: convertKeys(appointment) });
   } catch (err) { return next(err); }
