@@ -56,8 +56,20 @@ async function sendBaileysTextMessage(tenantId, phone, text) {
     return null;
   }
 
-  // Baileys expects JID format: phone@s.whatsapp.net (strip leading +)
-  const jid = phone.replace(/^\+/, '') + '@s.whatsapp.net';
+  // Baileys expects digits-only JID format: <countrycode+number>@s.whatsapp.net
+  // Normalize input such as "+54 9 11 1234-5678" or "(549)11...".
+  const normalizedPhone = String(phone || '')
+    .trim()
+    .replace(/^\+/, '')
+    .replace(/^00/, '')
+    .replace(/\D/g, '');
+
+  if (!/^\d{10,15}$/.test(normalizedPhone)) {
+    logger.warn({ tenantId, phone, normalizedPhone }, '[Baileys] Invalid phone format — message skipped');
+    return null;
+  }
+
+  const jid = normalizedPhone + '@s.whatsapp.net';
   logger.info({ tenantId, jid, textLength: text?.length }, '[Baileys] Enviando mensaje...');
   let result;
   try {

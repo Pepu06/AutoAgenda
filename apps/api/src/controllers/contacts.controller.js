@@ -1,5 +1,6 @@
 const { supabase, convertKeys } = require('@autoagenda/db');
-const { NotFoundError } = require('../errors');
+const { NotFoundError, ValidationError } = require('../errors');
+const { normalizePhone } = require('../utils/phone');
 
 async function list(req, res, next) {
   try {
@@ -16,9 +17,11 @@ async function list(req, res, next) {
 async function create(req, res, next) {
   try {
     const { name, phone, notes, email, dni, birthDate } = req.body;
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) throw new ValidationError('Teléfono inválido.');
 
     const [{ data: byPhone }, { data: byName }] = await Promise.all([
-      supabase.from('contacts').select('id').eq('tenant_id', req.tenantId).eq('phone', phone).limit(1),
+      supabase.from('contacts').select('id').eq('tenant_id', req.tenantId).eq('phone', normalizedPhone).limit(1),
       supabase.from('contacts').select('id').eq('tenant_id', req.tenantId).ilike('name', name).limit(1),
     ]);
 
@@ -31,7 +34,7 @@ async function create(req, res, next) {
 
     const { data, error } = await supabase
       .from('contacts')
-      .insert({ tenant_id: req.tenantId, name, phone, notes, email: email || null, dni: dni || null, birth_date: birthDate || null })
+      .insert({ tenant_id: req.tenantId, name, phone: normalizedPhone, notes, email: email || null, dni: dni || null, birth_date: birthDate || null })
       .select().single();
     if (error) throw error;
     return res.status(201).json({ success: true, data: convertKeys(data) });
@@ -54,8 +57,23 @@ async function update(req, res, next) {
     if (!existing) throw new NotFoundError('Contact not found');
 
     const { name, phone, notes, email, dni, birthDate } = req.body;
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) throw new ValidationError('Teléfono inválido.');
+
+    const { data: duplicateByPhone } = await supabase
+      .from('contacts')
+      .select('id')
+      .eq('tenant_id', req.tenantId)
+      .eq('phone', normalizedPhone)
+      .neq('id', req.params.id)
+      .limit(1);
+
+    if (duplicateByPhone && duplicateByPhone.length > 0) {
+      return res.status(409).json({ success: false, error: 'Ya existe un contacto con ese teléfono' });
+    }
+
     const { data, error } = await supabase
-      .from('contacts').update({ name, phone, notes, email: email || null, dni: dni || null, birth_date: birthDate || null }).eq('id', req.params.id).select().single();
+      .from('contacts').update({ name, phone: normalizedPhone, notes, email: email || null, dni: dni || null, birth_date: birthDate || null }).eq('id', req.params.id).select().single();
     if (error) throw error;
     return res.json({ success: true, data: convertKeys(data) });
   } catch (err) { return next(err); }

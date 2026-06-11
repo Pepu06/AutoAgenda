@@ -5,8 +5,7 @@ const { appointmentsQueue } = require('../workers/queue');
 const { JobName } = require('@autoagenda/shared');
 const { createCalendarEventInCalendar, refreshAccessToken } = require('../services/google');
 const { sendTemplate } = require('../services/whatsapp');
-
-const PHONE_RE = /^\+?[1-9]\d{7,14}$/;
+const { normalizePhone } = require('../utils/phone');
 
 async function _getTenantBySlug(slug) {
   const { data, error } = await supabase
@@ -170,7 +169,8 @@ async function createBooking(req, res, next) {
     if (!scheduledAt) throw new ValidationError('scheduledAt es requerido.');
     if (!name?.trim())  throw new ValidationError('El nombre es requerido.');
     if (!phone?.trim()) throw new ValidationError('El teléfono es requerido.');
-    if (!PHONE_RE.test(phone.trim())) throw new ValidationError('Teléfono inválido. Usa formato E.164 (ej: +5491112345678).');
+    const cleanPhone = normalizePhone(phone);
+    if (!cleanPhone) throw new ValidationError('Teléfono inválido.');
 
     const { data: type } = await supabase
       .from('autoagenda_types').select('*').eq('id', req.params.typeId).eq('tenant_id', tenant.id).maybeSingle();
@@ -228,7 +228,6 @@ async function createBooking(req, res, next) {
     if (!owner) throw new AppError('Error interno: no se encontró el profesional.', 500);
 
     // Find or create contact
-    const cleanPhone = phone.trim();
     let { data: contact } = await supabase
       .from('contacts').select('id').eq('tenant_id', tenant.id).eq('phone', cleanPhone).maybeSingle();
     if (!contact) {
