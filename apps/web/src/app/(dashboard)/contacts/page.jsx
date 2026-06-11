@@ -56,9 +56,12 @@ export default function ContactsPage() {
     setError('');
     try {
       await api.delete(`/contacts/${id}`);
-      fetchContacts();
+      await fetchContacts();
     } catch (err) {
-      setError(err.message || 'No se pudo eliminar el contacto.');
+      const message = err?.message || 'No se pudo eliminar el contacto.';
+      setError(message);
+      console.error('[Contacts] Delete failed:', message, err);
+      alert(message);
     }
   }
 
@@ -73,6 +76,8 @@ export default function ContactsPage() {
           {showForm && !editId ? 'Cancelar' : '+ Nuevo contacto'}
         </button>
       </div>
+
+      {error && !showForm && <p className={styles.error}>{error}</p>}
 
       {showForm && (
         <form onSubmit={handleSubmit} className={styles.form}>
