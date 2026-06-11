@@ -46,8 +46,13 @@ export default function AppointmentsPage() {
 
   async function handleDelete(appointmentId) {
     if (!confirm('¿Eliminar esta cita? Esta acción no se puede deshacer.')) return;
-    await api.delete(`/appointments/${appointmentId}`);
-    fetchEvents();
+    try {
+      await api.delete(`/appointments/${appointmentId}`);
+      await fetchEvents();
+    } catch (err) {
+      console.error('[Appointments] Delete failed:', err);
+      alert(err.message || 'No se pudo eliminar la cita');
+    }
   }
 
   const filtered = events.filter(e => {

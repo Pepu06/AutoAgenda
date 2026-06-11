@@ -148,9 +148,9 @@ async function remove(req, res, next) {
       .from('appointments').select('id, google_event_id, user_id').eq('id', req.params.id).eq('tenant_id', req.tenantId).maybeSingle();
     if (!existing) throw new NotFoundError('Appointment not found');
 
-    await supabase.from('message_logs').delete().eq('appointment_id', req.params.id);
+    await supabase.from('message_logs').delete().eq('appointment_id', req.params.id).eq('tenant_id', req.tenantId);
 
-    const { error } = await supabase.from('appointments').delete().eq('id', req.params.id);
+    const { error } = await supabase.from('appointments').delete().eq('id', req.params.id).eq('tenant_id', req.tenantId);
     if (error) throw error;
 
     if (existing.google_event_id) {

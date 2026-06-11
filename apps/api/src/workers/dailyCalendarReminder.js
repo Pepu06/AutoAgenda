@@ -217,21 +217,6 @@ async function runDailyReminders() {
       });
       const horaLabel = formatTemplateHour(dateObj, { timeZone: tz, timeFormat });
 
-      // Claim atomically first — only succeeds if reminder_sent_at is still null
-      // This prevents duplicate sends when multiple instances run in parallel
-      const reminderTime = new Date().toISOString();
-      const { data: claimed } = await supabase
-        .from('appointments')
-        .update({ reminder_sent_at: reminderTime, status: 'pending' })
-        .eq('id', appt.id)
-        .is('reminder_sent_at', null)
-        .select('id');
-
-      if (!claimed || claimed.length === 0) {
-        logger.info({ appointmentId: appt.id }, 'Reminder already claimed by another instance, skipping');
-        continue;
-      }
-
       // Now send the reminder
       const tmpl = appt.tenant?.reminder_template || DEFAULT_REMINDER_TEMPLATE;
       const rendered = renderTemplate(tmpl, {
@@ -246,7 +231,26 @@ async function runDailyReminders() {
 
       const whatsappResponse = await sendTextMessage(appt.contact.phone, fullText, tenantConfig);
 
+      if (!whatsappResponse) {
+        throw new Error('Baileys/WhatsApp no disponible para enviar el recordatorio');
+      }
+
       const waMessageId = whatsappResponse?.messages?.[0]?.id || whatsappResponse?.key?.id || null;
+
+      // Claim after a successful send so we do not lose reminders when Baileys is temporarily down.
+      // In this single-process cron, the in-memory run lock below prevents duplicate sends.
+      const reminderTime = new Date().toISOString();
+      const { data: claimed } = await supabase
+        .from('appointments')
+        .update({ reminder_sent_at: reminderTime, status: 'pending' })
+        .eq('id', appt.id)
+        .is('reminder_sent_at', null)
+        .select('id');
+
+      if (!claimed || claimed.length === 0) {
+        logger.info({ appointmentId: appt.id }, 'Reminder was sent but not claimed, skipping log write');
+        continue;
+      }
 
       await trackMessageSent(appt.tenant_id, 'reminder');
 
@@ -273,7 +277,7 @@ async function runDailyReminders() {
 }
 
 function startDailyReminderCron() {
-  // Run at minute 0 of every hour; reminders use tenant-configured reminder_time
+  // Run at minute 0 of every hour; reminders use tenant-configured reminder_time.
   cron.schedule('0 * * * *', runDailyReminders, { timezone: 'UTC' });
   logger.info('Daily calendar reminder cron scheduled (hourly)');
 }
