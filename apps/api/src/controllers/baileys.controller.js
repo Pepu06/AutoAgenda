@@ -3,6 +3,7 @@ const QRCode = require('qrcode');
 const { startSession, stopSession, isConnected, onQR, onStatus } = require('../services/baileys-session');
 const { supabase } = require('@autoagenda/db');
 const logger = require('../config/logger');
+const env = require('../config/env');
 
 async function getStatus(req, res, next) {
   try {
@@ -13,6 +14,9 @@ async function getStatus(req, res, next) {
 
 async function connect(req, res, next) {
   try {
+    if (!env.BAILEYS_ENABLED) {
+      return res.status(503).json({ success: false, error: 'Baileys disabled in this environment' });
+    }
     await startSession(req.tenantId);
     return res.json({ success: true });
   } catch (err) { return next(err); }
@@ -34,6 +38,11 @@ async function qrStream(req, res) {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection',    'keep-alive');
   res.flushHeaders();
+
+  if (!env.BAILEYS_ENABLED) {
+    res.write(`event: error\ndata: ${JSON.stringify({ message: 'Baileys disabled in this environment' })}\n\n`);
+    return res.end();
+  }
 
   if (isConnected(tenantId)) {
     res.write('event: connected\ndata: {}\n\n');

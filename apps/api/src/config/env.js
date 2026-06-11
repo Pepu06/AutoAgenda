@@ -12,6 +12,7 @@ const envSchema = z.object({
   SUPABASE_SERVICE_KEY:  z.string().min(1),
   JWT_SECRET:            z.string().min(8),
   REDIS_URL:             z.string().optional().default(''),
+  BAILEYS_ENABLED:       z.string().optional().default('true').transform((v) => v !== 'false'),
   SENTRY_DSN:            z.string().optional().default(''),
   WHATSAPP_TEMPLATE_LANGUAGE:  z.string().optional().default('en'),
   WHATSAPP_VERIFY_TOKEN:       z.string().optional().default('verify'),

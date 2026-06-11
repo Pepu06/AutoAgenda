@@ -58,8 +58,15 @@ async function sendBaileysTextMessage(tenantId, phone, text) {
 
   // Baileys expects JID format: phone@s.whatsapp.net (strip leading +)
   const jid = phone.replace(/^\+/, '') + '@s.whatsapp.net';
-  const result = await sock.sendMessage(jid, { text });
-  logger.info({ tenantId, phone, messageId: result?.key?.id }, '[Baileys] Mensaje enviado');
+  logger.info({ tenantId, jid, textLength: text?.length }, '[Baileys] Enviando mensaje...');
+  let result;
+  try {
+    result = await sock.sendMessage(jid, { text, linkPreview: null });
+  } catch (sendErr) {
+    logger.error({ tenantId, jid, err: sendErr?.message }, '[Baileys] Error en sendMessage');
+    throw sendErr;
+  }
+  logger.info({ tenantId, jid, messageId: result?.key?.id, status: result?.status }, '[Baileys] Resultado send');
   return result;
 }
 

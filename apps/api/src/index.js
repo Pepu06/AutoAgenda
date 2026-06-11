@@ -26,5 +26,9 @@ app.listen(env.PORT, () => {
   startSubscriptionRenewalCron();
   startCalendarWatchRenewalCron();
   startAppointmentCleanupCron();
-  restoreAllSessions().catch(err => logger.error({ err }, '[Baileys] Session restore failed'));
+  if (env.BAILEYS_ENABLED) {
+    restoreAllSessions().catch(err => logger.error({ err }, '[Baileys] Session restore failed'));
+  } else {
+    logger.info('[Baileys] Disabled in this environment (BAILEYS_ENABLED=false) — skipping session restore');
+  }
 });

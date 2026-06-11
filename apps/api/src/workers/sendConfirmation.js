@@ -7,6 +7,7 @@ const { formatTime } = require('../utils/datetime');
 const { checkUsageLimit } = require('../middleware/checkUsage');
 
 async function sendConfirmation({ appointmentId }) {
+  logger.info({ appointmentId }, '[Confirmation] Job started');
   const { data: appointment } = await supabase
     .from('appointments')
     .select('*, contact:contacts(name, phone), service:services(name), tenant:tenants(timezone, time_format, business_name, reminder_type, messaging_enabled, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode, confirmation_template)')
@@ -98,9 +99,14 @@ async function sendConfirmation({ appointmentId }) {
   const fullText = rendered + confirmLink;
 
   const whatsappResponse = await sendTextMessage(appointment.contact.phone, fullText, tenantConfig);
-  
+
+  if (!whatsappResponse) {
+    logger.warn({ appointmentId, tenantId: appointment.tenant_id }, '[Confirmation] No WhatsApp response — message not delivered, will retry');
+    throw new Error('No WhatsApp response — session may not be ready');
+  }
+
   const waMessageId = whatsappResponse?.messages?.[0]?.id || whatsappResponse?.key?.id || null;
-  
+
   const { error: updateError } = await supabase
     .from('appointments')
     .update({
@@ -129,7 +135,7 @@ async function sendConfirmation({ appointmentId }) {
     throw logError;
   }
 
-  logger.info({ appointmentId }, 'Confirmation sent via confirmacion_turno template, status changed to notified');
+  logger.info({ appointmentId }, '[Confirmation] Mensaje enviado, status -> notified');
 }
 
 module.exports = { sendConfirmation };

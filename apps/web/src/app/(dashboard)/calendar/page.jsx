@@ -71,7 +71,7 @@ export default function CalendarPage() {
   const [syncing, setSyncing]         = useState(false);
   const [reminding, setReminding]     = useState(null);
   const [currentDate, setCurrentDate] = useState(() => { const d = new Date(); d.setDate(1); return d; });
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showCreate, setShowCreate]   = useState(false);
   const [createForm, setCreateForm]   = useState(EMPTY_CREATE);
@@ -260,7 +260,7 @@ export default function CalendarPage() {
     if (!services.length) setServices(s.data || []);
     setLocationMode(settings.data?.locationMode || 'fixed');
     setCreateForm(EMPTY_CREATE);
-    const parts = selectedDate ? selectedDate.split('-') : new Date().toISOString().slice(0,10).split('-');
+    const parts = selectedDate ? selectedDate.split('-') : new Date().toLocaleDateString('en-CA').split('-');
     setCreateYear(parts[0]); setCreateMonth(parts[1]); setCreateDay(parts[2]);
     setCreateHour('09'); setCreateMin('00');
     setCreateError('');
@@ -368,7 +368,7 @@ export default function CalendarPage() {
     [events, selectedDate]
   );
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toLocaleDateString('en-CA');
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 6 }, (_, i) => currentYear - 2 + i);
 

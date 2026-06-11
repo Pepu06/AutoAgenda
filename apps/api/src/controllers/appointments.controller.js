@@ -7,12 +7,10 @@ const { updateEventColor, updateCalendarEventDateTime, refreshAccessToken, getCa
 const { getValidToken, getOwnerCalendarId } = require('./calendar.controller');
 
 const APPOINTMENT_SELECT = '*, contact:contacts(*), service:services(*), user:users(*)';
-const REMINDER_CONFIG_ERROR = 'Completá Nombre del negocio y Mensaje personalizable en Configuración para poder crear citas y enviar recordatorios.';
+const REMINDER_CONFIG_ERROR = 'Completá el Nombre del negocio en Configuración para poder crear citas y enviar recordatorios.';
 
 function hasReminderConfig(tenant) {
-  const businessName = String(tenant?.business_name || '').trim();
-  const messageTemplate = String(tenant?.message_template || '').trim();
-  return Boolean(businessName && messageTemplate);
+  return Boolean(String(tenant?.business_name || '').trim());
 }
 
 async function list(req, res, next) {
@@ -70,7 +68,7 @@ async function create(req, res, next) {
     const queueJob = (name, opts = {}) =>
       appointmentsQueue.add(name, { appointmentId: data.id }, opts).catch(() => {});
 
-    queueJob(JobName.SEND_CONFIRMATION);
+    queueJob(JobName.SEND_CONFIRMATION, { delay: 10000, attempts: 5, backoff: { type: 'exponential', delay: 8000 } });
 
     return res.status(201).json({ success: true, data: convertKeys(data) });
   } catch (err) { return next(err); }

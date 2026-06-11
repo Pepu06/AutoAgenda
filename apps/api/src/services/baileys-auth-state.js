@@ -17,7 +17,7 @@ async function useSupabaseAuthState(tenantId) {
   // PGRST116 = no row found (expected for new tenants)
   if (loadError && loadError.code !== 'PGRST116') throw loadError;
 
-  logger.info({ tenantId, fresh: !row?.creds_json }, '[BaileysAuth] Auth state loaded');
+  logger.debug({ tenantId, fresh: !row?.creds_json }, '[BaileysAuth] Auth state loaded');
 
   const creds = row?.creds_json
     ? JSON.parse(JSON.stringify(row.creds_json), BufferJSON.reviver)
@@ -73,7 +73,7 @@ async function useSupabaseAuthState(tenantId) {
 
     if (upsertError) throw upsertError;
 
-    logger.info({ tenantId }, '[BaileysAuth] Credentials persisted');
+    logger.debug({ tenantId }, '[BaileysAuth] Credentials persisted');
   }
 
   const saveCreds = _persist;
