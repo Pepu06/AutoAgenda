@@ -4,11 +4,9 @@ const { AppError } = require('../errors');
 const ALLOWED_FIELDS = [
   'business_name', 'timezone', 'time_format',
   'messaging_enabled', 'message_template', 'reminder_template', 'confirmation_template',
-  'whatsapp_provider', 'whatsapp_phone_number_id', 'whatsapp_access_token', 'wasender_api_key',
   'admin_whatsapp', 'admin_alerts_enabled', 'admin_daily_report_time',
   'reminder_type', 'reminder_time',
   'report_days', 'report_type',
-  'wasender_connected',
   'location_mode', 'location',
   'confirm_reply_message', 'cancel_reply_message',
 ];
@@ -39,11 +37,6 @@ async function updateSettings(req, res, next) {
     }
 
     if (!Object.keys(updates).length) throw new AppError('No valid fields provided', 400);
-
-    // Auto-sync wasender_connected based on whatsapp_provider
-    if ('whatsapp_provider' in updates) {
-      updates.wasender_connected = updates.whatsapp_provider === 'wasender';
-    }
 
     // Validar configuración completa antes de activar el motor de mensajes
     if (updates.messaging_enabled === true) {

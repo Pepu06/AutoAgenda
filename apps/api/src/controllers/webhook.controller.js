@@ -1,7 +1,7 @@
 const { supabase } = require('@autoagenda/db');
 const { getCalendarEvent, updateEventTitleAndColor, refreshAccessToken } = require('../services/google');
 const { runCalendarSync } = require('./calendar.controller');
-const { sendTemplate, sendTextMessage } = require('../services/whatsapp');
+const { sendMessage } = require('../services/whatsapp');
 const { getSubscriptionStatus } = require('../services/mercadopago');
 const env = require('../config/env');
 const logger = require('../config/logger');
@@ -75,16 +75,6 @@ async function processMessage(message, _metadata) {
     return;
   }
 
-  // Check if it's a daily report request: "daily_report_<tenantId>_<morning|evening>"
-  const reportMatch = rawText.match(/^daily_report_([^_]+)_(morning|evening)$/);
-  if (reportMatch) {
-    const tenantId = reportMatch[1];
-    const reportType = reportMatch[2];
-    const phone = from.startsWith('+') ? from : `+${from}`;
-    await handleDailyReportRequest(phone, tenantId, reportType);
-    return;
-  }
-
   // Button payload must embed appointmentId: "confirm_<uuid>" / "cancel_<uuid>"
   const embedMatch = rawText.match(/^(confirm|cancel)_([0-9a-f-]{36})$/i);
   if (!embedMatch) {
@@ -140,7 +130,7 @@ async function processMessage(message, _metadata) {
   try {
     const { data: replyTenant } = await supabase
       .from('tenants')
-      .select('confirm_reply_message, cancel_reply_message, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key')
+      .select('confirm_reply_message, cancel_reply_message')
       .eq('id', appointment.tenant_id)
       .single();
 
@@ -152,14 +142,7 @@ async function processMessage(message, _metadata) {
       : (replyTenant?.cancel_reply_message  || DEFAULT_CANCEL);
 
     const clientPhone = from.startsWith('+') ? from : `+${from}`;
-    const tenantConfig = {
-      provider: replyTenant.whatsapp_provider || 'baileys',
-      tenantId: appointment.tenant_id,
-      whatsappPhoneNumberId: replyTenant.whatsapp_phone_number_id,
-      whatsappAccessToken: replyTenant.whatsapp_access_token,
-      wasender_api_key: replyTenant.wasender_api_key,
-    };
-    await sendTextMessage(clientPhone, replyText, tenantConfig);
+    await sendMessage(appointment.tenant_id, clientPhone, replyText);
     logger.info({ appointmentId: appointment.id, newStatus }, 'Reply message sent to client');
   } catch (err) {
     logger.warn({ err }, 'Failed to send reply message to client');
@@ -170,7 +153,7 @@ async function processMessage(message, _metadata) {
     try {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('admin_whatsapp, admin_alerts_enabled, timezone, time_format, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key')
+        .select('admin_whatsapp, admin_alerts_enabled, timezone, time_format')
         .eq('id', appointment.tenant_id)
         .single();
 
@@ -186,28 +169,11 @@ async function processMessage(message, _metadata) {
         const dateStr = apptDate.toLocaleDateString('es-AR', { timeZone: tz, weekday: 'long', day: '2-digit', month: '2-digit' });
         const timeStr = formatTime(apptDate, { timeZone: tz, timeFormat: tenant.time_format });
 
-        const rawPhone = fullAppt.contact.phone.replace(/^\+?549?/, '');
+        const cancelText = `❌ *Cancelación de turno*\n\n👤 ${fullAppt.contact.name}\n📞 ${fullAppt.contact.phone}\n📅 ${dateStr} a las ${timeStr}\n💼 ${fullAppt.service.name}`;
 
-        const tenantConfig = {
-          provider: tenant.whatsapp_provider || 'baileys',
-          tenantId: appointment.tenant_id,
-          whatsappPhoneNumberId: tenant.whatsapp_phone_number_id,
-          whatsappAccessToken: tenant.whatsapp_access_token,
-          wasender_api_key: tenant.wasender_api_key,
-        };
-
-        // Always use the default cancellation template
-        const templateName = 'admin_cancelacion';
         const adminNumbers = tenant.admin_whatsapp.split(',').map(n => n.trim()).filter(Boolean);
-
         for (const adminPhone of adminNumbers) {
-          await sendTemplate(adminPhone, templateName, [
-            fullAppt.contact.name,
-            rawPhone,
-            dateStr,
-            timeStr,
-            fullAppt.service.name,
-          ], tenantConfig).catch(() => {});
+          await sendMessage(appointment.tenant_id, adminPhone, cancelText).catch(() => {});
         }
 
         logger.info({ appointmentId: appointment.id, adminNumbers }, 'Admin cancellation alert sent');
@@ -265,153 +231,6 @@ async function processMessage(message, _metadata) {
   } catch (err) {
     logger.warn({ err }, 'Failed to update Calendar from webhook');
   }
-}
-
-async function handleDailyReportRequest(phone, tenantId, reportType) {
-  logger.info({ phone, tenantId, reportType }, '[Webhook] Processing daily report request');
-
-  // Verify the phone matches the tenant's admin_whatsapp
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('admin_whatsapp, timezone, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key')
-    .eq('id', tenantId)
-    .maybeSingle();
-
-  if (!tenant || tenant.admin_whatsapp !== phone) {
-    logger.warn({ phone, tenantId }, '[Webhook] Phone does not match tenant admin');
-    return;
-  }
-
-  const tz = tenant.timezone || 'America/Argentina/Buenos_Aires';
-  const tenantConfig = {
-    provider: tenant.whatsapp_provider || 'baileys',
-    tenantId: tenantId,
-    whatsappPhoneNumberId: tenant.whatsapp_phone_number_id,
-    whatsappAccessToken: tenant.whatsapp_access_token,
-    wasender_api_key: tenant.wasender_api_key,
-  };
-  const now = new Date();
-
-  // Determine which day to report
-  let targetDate;
-  if (reportType === 'morning') {
-    // Morning report: show today's appointments
-    targetDate = new Date(now.toLocaleString('en-US', { timeZone: tz }));
-  } else {
-    // Evening report: show tomorrow's appointments
-    const localDate = new Date(now.toLocaleString('en-US', { timeZone: tz }));
-    targetDate = new Date(localDate);
-    targetDate.setDate(targetDate.getDate() + 1);
-  }
-
-  // Get start and end of target day in UTC
-  const dayStart = new Date(targetDate);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(targetDate);
-  dayEnd.setHours(23, 59, 59, 999);
-
-  // Convert to UTC for query
-  const startUTC = new Date(dayStart.toLocaleString('en-US', { timeZone: tz }));
-  const endUTC = new Date(dayEnd.toLocaleString('en-US', { timeZone: tz }));
-
-  // Fetch appointments for the day
-  const { data: appointments, error } = await supabase
-    .from('appointments')
-    .select(`
-      id,
-      scheduled_at,
-      status,
-      notes,
-      contact:contacts(name, phone),
-      service:services(name)
-    `)
-    .eq('tenant_id', tenantId)
-    .gte('scheduled_at', startUTC.toISOString())
-    .lte('scheduled_at', endUTC.toISOString())
-    .order('scheduled_at', { ascending: true });
-
-  if (error) {
-    logger.error({ error: error.message }, '[Webhook] Failed to fetch appointments for daily report');
-    return;
-  }
-
-  if (!appointments || appointments.length === 0) {
-    const { sendTextMessage } = require('../services/whatsapp');
-    const dayLabel = targetDate.toLocaleDateString('es-AR', { 
-      weekday: 'long', 
-      day: 'numeric', 
-      month: 'long' 
-    });
-    await sendTextMessage(phone, `📊 Reporte diario - ${dayLabel}\n\nNo hay turnos programados para este día.`, tenantConfig);
-    return;
-  }
-
-  // Format the report
-  const dayLabel = targetDate.toLocaleDateString('es-AR', { 
-    weekday: 'long', 
-    day: 'numeric', 
-    month: 'long',
-    year: 'numeric'
-  });
-
-  let report = `📊 *Reporte diario - ${dayLabel}*\n\n`;
-  report += `Total de turnos: ${appointments.length}\n\n`;
-
-  // Group by status
-  const statusEmoji = {
-    sin_enviar: '🟡',
-    pending: '⏳',
-    notified: '📧',
-    confirmed: '✅',
-    cancelled: '❌'
-  };
-
-  const statusLabels = {
-    sin_enviar: 'Sin enviar',
-    pending: 'Pendiente',
-    notified: 'Notificado',
-    confirmed: 'Confirmado',
-    cancelled: 'Cancelado'
-  };
-
-  appointments.forEach((appt, idx) => {
-    const timeLabel = new Date(appt.scheduled_at).toLocaleTimeString('es-AR', {
-      timeZone: tz,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-
-    const emoji = statusEmoji[appt.status] || '•';
-    const statusLabel = statusLabels[appt.status] || appt.status;
-
-    report += `${idx + 1}. ${emoji} ${timeLabel} - ${appt.contact.name}\n`;
-    report += `   📞 ${appt.contact.phone}\n`;
-    report += `   💼 ${appt.service.name}\n`;
-    report += `   📌 Estado: ${statusLabel}\n`;
-    if (appt.notes) {
-      report += `   📝 ${appt.notes}\n`;
-    }
-    report += `\n`;
-  });
-
-  // Add summary by status
-  const statusCount = {};
-  appointments.forEach(appt => {
-    statusCount[appt.status] = (statusCount[appt.status] || 0) + 1;
-  });
-
-  report += `\n📈 *Resumen por estado:*\n`;
-  Object.entries(statusCount).forEach(([status, count]) => {
-    const emoji = statusEmoji[status] || '•';
-    const label = statusLabels[status] || status;
-    report += `${emoji} ${label}: ${count}\n`;
-  });
-
-  const { sendTextMessage } = require('../services/whatsapp');
-  await sendTextMessage(phone, report, tenantConfig);
-
-  logger.info({ phone, tenantId, reportType, count: appointments.length }, '[Webhook] Daily report sent');
 }
 
 /**

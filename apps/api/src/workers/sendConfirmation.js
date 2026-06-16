@@ -1,5 +1,5 @@
 const { supabase } = require('@autoagenda/db');
-const { sendTextMessage, renderTemplate, DEFAULT_CONFIRMATION_TEMPLATE } = require('../services/whatsapp');
+const { sendMessage, renderTemplate, DEFAULT_CONFIRMATION_TEMPLATE } = require('../services/whatsapp');
 const env = require('../config/env');
 const { getCalendarEvent, refreshAccessToken } = require('../services/google');
 const logger = require('../config/logger');
@@ -10,7 +10,7 @@ async function sendConfirmation({ appointmentId }) {
   logger.info({ appointmentId }, '[Confirmation] Job started');
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('*, contact:contacts(name, phone), service:services(name), tenant:tenants(timezone, time_format, business_name, reminder_type, messaging_enabled, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode, confirmation_template)')
+    .select('*, contact:contacts(name, phone), service:services(name), tenant:tenants(timezone, time_format, business_name, reminder_type, messaging_enabled, location, location_mode, confirmation_template)')
     .eq('id', appointmentId)
     .maybeSingle();
 
@@ -37,20 +37,15 @@ async function sendConfirmation({ appointmentId }) {
 
   const tz = appointment.tenant?.timezone || 'America/Argentina/Buenos_Aires';
   const dateObj = new Date(appointment.scheduled_at);
-  
-  // Formato día: "viernes, 3 de abril de 2026"
+
   const diaLabel = dateObj.toLocaleDateString('es-AR', {
     timeZone: tz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
-  
-  // Formato hora: "10:00"
   const horaLabel = formatTime(dateObj, { timeZone: tz, timeFormat: appointment.tenant?.time_format });
 
-  // Determinar texto del recordatorio basado en reminder_type
   const reminderType = appointment.tenant?.reminder_type || 'day_before';
   const recordatorioTexto = reminderType === 'same_day' ? 'el mismo día' : 'el día anterior';
 
-  // Resolver ubicación según location_mode
   let ubicacion = appointment.tenant?.location || '';
   if (appointment.tenant?.location_mode === 'calendar' && appointment.google_event_id && appointment.user_id) {
     try {
@@ -76,43 +71,31 @@ async function sendConfirmation({ appointmentId }) {
     }
   }
 
-  // Configuración del proveedor de WhatsApp
-  const tenantConfig = {
-    provider: appointment.tenant?.whatsapp_provider || 'baileys',
-    tenantId: appointment.tenant_id,
-    whatsappPhoneNumberId: appointment.tenant?.whatsapp_phone_number_id,
-    whatsappAccessToken: appointment.tenant?.whatsapp_access_token,
-    wasender_api_key: appointment.tenant?.wasender_api_key,
-  };
-
   const tmpl = appointment.tenant?.confirmation_template || DEFAULT_CONFIRMATION_TEMPLATE;
   const rendered = renderTemplate(tmpl, {
-    nombre:      appointment.contact.name,
-    servicio:    appointment.service.name,
-    fecha:       diaLabel,
-    hora:        horaLabel,
+    nombre:       appointment.contact.name,
+    servicio:     appointment.service.name,
+    fecha:        diaLabel,
+    hora:         horaLabel,
     ubicacion,
-    negocio:     appointment.tenant?.business_name || '',
+    negocio:      appointment.tenant?.business_name || '',
     recordatorio: recordatorioTexto,
   });
   const confirmLink = `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointmentId}`;
   const fullText = rendered + confirmLink;
 
-  const whatsappResponse = await sendTextMessage(appointment.contact.phone, fullText, tenantConfig);
+  const whatsappResponse = await sendMessage(appointment.tenant_id, appointment.contact.phone, fullText);
 
   if (!whatsappResponse) {
     logger.warn({ appointmentId, tenantId: appointment.tenant_id }, '[Confirmation] No WhatsApp response — message not delivered, will retry');
     throw new Error('No WhatsApp response — session may not be ready');
   }
 
-  const waMessageId = whatsappResponse?.messages?.[0]?.id || whatsappResponse?.key?.id || null;
+  const waMessageId = whatsappResponse?.key?.id || null;
 
   const { error: updateError } = await supabase
     .from('appointments')
-    .update({
-      confirmation_sent_at: new Date().toISOString(),
-      status: 'notified',
-    })
+    .update({ confirmation_sent_at: new Date().toISOString(), status: 'notified' })
     .eq('id', appointmentId)
     .eq('tenant_id', appointment.tenant_id);
 

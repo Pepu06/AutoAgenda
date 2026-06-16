@@ -3,7 +3,7 @@ const logger = require('../config/logger');
 const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor, createCalendarEvent, listCalendars, watchCalendar, stopCalendarWatch } = require('../services/google');
 const env = require('../config/env');
 const crypto = require('crypto');
-const { sendTemplate, sendTextMessage, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
+const { sendMessage, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
 const { appointmentsQueue } = require('../workers/queue');
 const { trackMessageSent } = require('../workers/usageTracking');
 const { checkUsageLimit } = require('../middleware/checkUsage');
@@ -521,7 +521,7 @@ async function remindEvent(req, res, next) {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('business_name, message_template, reminder_template, timezone, time_format, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode')
+      .select('business_name, message_template, reminder_template, timezone, time_format, location, location_mode')
       .eq('id', req.tenantId)
       .single();
 
@@ -549,14 +549,6 @@ async function remindEvent(req, res, next) {
       ? event.location
       : (tenant?.location || '');
 
-    const tenantConfig = {
-      provider: tenant?.whatsapp_provider || 'baileys',
-      tenantId: req.tenantId,
-      whatsappPhoneNumberId: tenant?.whatsapp_phone_number_id,
-      whatsappAccessToken: tenant?.whatsapp_access_token,
-      wasender_api_key: tenant?.wasender_api_key,
-    };
-
     const tmpl = tenant?.reminder_template || DEFAULT_REMINDER_TEMPLATE;
     const rendered = renderTemplate(tmpl, {
       nombre: clientName,
@@ -568,7 +560,7 @@ async function remindEvent(req, res, next) {
     const confirmLink = appointment?.id
       ? `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointment.id}`
       : '';
-    await sendTextMessage(phone, rendered + confirmLink, tenantConfig);
+    await sendMessage(req.tenantId, phone, rendered + confirmLink);
 
     await trackMessageSent(req.tenantId, 'reminder');
 

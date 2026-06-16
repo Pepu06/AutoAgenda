@@ -1,5 +1,6 @@
 const { supabase } = require('@autoagenda/db');
-const { sendTemplate } = require('../services/whatsapp');
+const { sendMessage } = require('../services/whatsapp');
+const env = require('../config/env');
 const logger = require('../config/logger');
 const { formatTemplateHour } = require('../utils/datetime');
 const { checkUsageLimit } = require('../middleware/checkUsage');
@@ -13,7 +14,7 @@ function hasReminderConfig(tenant) {
 async function sendFollowUp({ appointmentId }) {
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('*, contact:contacts(*), service:services(*), tenant:tenants(timezone, time_format, business_name, message_template, messaging_enabled, location, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key)')
+    .select('*, contact:contacts(*), service:services(*), tenant:tenants(timezone, time_format, business_name, message_template, messaging_enabled, location)')
     .eq('id', appointmentId)
     .maybeSingle();
 
@@ -33,55 +34,36 @@ async function sendFollowUp({ appointmentId }) {
     return;
   }
 
-  // Send follow-up only for pending appointments
   if (appointment.status !== 'pending') {
     logger.info({ appointmentId, status: appointment.status }, 'Skipping follow-up, status is not pending');
     return;
   }
 
   if (!hasReminderConfig(appointment.tenant)) {
-    logger.warn({ appointmentId, tenantId: appointment.tenant_id }, 'Skipping recordatorio_turno follow-up: missing business_name or message_template');
+    logger.warn({ appointmentId, tenantId: appointment.tenant_id }, 'Skipping follow-up: missing business_name or message_template');
     return;
   }
 
   const tz = appointment.tenant?.timezone || 'America/Argentina/Buenos_Aires';
   const dateObj = new Date(appointment.scheduled_at);
   const date = dateObj.toLocaleDateString('es-AR', {
-    timeZone: tz,
-    weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
+    timeZone: tz, weekday: 'long', day: '2-digit', month: '2-digit',
   });
   const time = formatTemplateHour(dateObj, { timeZone: tz, timeFormat: appointment.tenant?.time_format });
 
-  const encabezado = appointment.tenant?.business_name;
-  const mensajeEditable = `Aún no confirmaste tu cita del ${date} ${time}.`;
+  const nombre = appointment.contact.name || 'Cliente';
+  const negocio = (appointment.tenant?.business_name || 'AutoAgenda').slice(0, 40);
   const ubicacion = appointment.tenant?.location || '';
 
-  const tenantConfig = {
-    provider: appointment.tenant?.whatsapp_provider || 'baileys',
-    tenantId: appointment.tenant_id,
-    whatsappPhoneNumberId: appointment.tenant?.whatsapp_phone_number_id,
-    whatsappAccessToken: appointment.tenant?.whatsapp_access_token,
-    wasender_api_key: appointment.tenant?.wasender_api_key,
-  };
+  let text = `📅 Recordatorio de turno con ${negocio}\n\n`;
+  text += `Hola ${nombre}, ¿cómo estás? 👋\n\n`;
+  text += `Aún no confirmaste tu cita del ${date} a las ${time}.`;
+  if (ubicacion) text += `\n\n📌 Ubicación: ${ubicacion}`;
+  text += `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointmentId}`;
 
-  const whatsappResponse = await sendTemplate(appointment.contact.phone, 'recordatorio_turno', {
-    header: [{ name: 'encabezado', value: encabezado }],
-    body: [
-      { name: 'nombre_cliente', value: appointment.contact.name || 'Cliente' },
-      { name: 'mensaje_editable', value: mensajeEditable },
-      { name: 'fecha', value: date },
-      { name: 'hora', value: time },
-      { name: 'ubicacion', value: ubicacion },
-    ],
-    buttons: [
-      { index: 0, payload: `confirm_${appointmentId}` },
-      { index: 1, payload: `cancel_${appointmentId}` },
-    ],
-  }, tenantConfig);
+  const whatsappResponse = await sendMessage(appointment.tenant_id, appointment.contact.phone, text);
 
-  const waMessageId = whatsappResponse?.messages?.[0]?.id || null;
+  const waMessageId = whatsappResponse?.key?.id || null;
 
   const { error: updateError } = await supabase
     .from('appointments')

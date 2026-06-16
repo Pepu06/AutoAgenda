@@ -6,8 +6,13 @@ const logger = require('../config/logger');
 /**
  * Returns a Baileys-compatible auth state backed by Supabase.
  * Compatible with Baileys' useMultiFileAuthState interface.
+ *
+ * @param {string} tenantId
+ * @param {() => boolean} [isActive] - guard; when it returns false this state
+ *   belongs to a superseded socket and must NOT persist (would clobber the
+ *   live socket's fresh credentials with stale data).
  */
-async function useSupabaseAuthState(tenantId) {
+async function useSupabaseAuthState(tenantId, isActive) {
   const { data: row, error: loadError } = await supabase
     .from('baileys_sessions')
     .select('creds_json, keys_json')
@@ -61,6 +66,13 @@ async function useSupabaseAuthState(tenantId) {
   };
 
   async function _persist() {
+    // Stale socket generation — dropping these writes prevents clobbering the
+    // live socket's freshly-saved credentials.
+    if (typeof isActive === 'function' && !isActive()) {
+      logger.debug({ tenantId }, '[BaileysAuth] Skipping persist from superseded socket');
+      return;
+    }
+
     const credsJson = JSON.parse(JSON.stringify(state.creds, BufferJSON.replacer));
     const keysJson  = JSON.parse(JSON.stringify(keys,        BufferJSON.replacer));
 

@@ -10,33 +10,69 @@ const { supabase } = require('@autoagenda/db');
 const { useSupabaseAuthState } = require('./baileys-auth-state');
 const logger = require('../config/logger');
 
-// tenantId -> { socket, reconnectScheduled: bool, qrCallbacks: Set<fn>, statusCallbacks: Set<fn>, lastQR: string|null }
+// tenantId -> entry. Only ONE socket per tenant may be live at a time; the
+// `epoch` token guarantees stale sockets can neither persist creds nor schedule
+// reconnects (prevents WA 440 conflicts and auth-state corruption).
 const sessions = new Map();
 const stoppedIntentionally = new Set();
 
+const MAX_RECONNECT_DELAY = 60_000;
+
+function getEntry(tenantId) {
+  let entry = sessions.get(tenantId);
+  if (!entry) {
+    entry = {
+      socket: null,
+      epoch: 0,            // bumps each socket generation; stale handlers self-cancel
+      starting: null,      // in-flight start promise (single-flight guard)
+      reconnectTimer: null,
+      retries: 0,
+      qrCallbacks: new Set(),
+      statusCallbacks: new Set(),
+      lastQR: null,
+    };
+    sessions.set(tenantId, entry);
+  }
+  return entry;
+}
+
 async function startSession(tenantId) {
-  // If already have an open socket, return it
-  if (sessions.has(tenantId)) {
-    const existing = sessions.get(tenantId);
-    if (existing.socket?.user) return existing.socket; // already connected
-    // If socket is null, a reconnect is already in progress — unless WE scheduled it
-    if (existing.socket === null) {
-      if (!existing.reconnectScheduled) return null;
-      existing.reconnectScheduled = false; // clear: this IS the scheduled reconnect
-    } else {
-    // Stale socket with no user — close it but keep callbacks
-      try { existing.socket.end(undefined); } catch (_) {}
-      existing.socket = null;
-      existing.lastQR = null;
-    }
+  const entry = getEntry(tenantId);
+
+  if (entry.socket?.user) return entry.socket; // already connected
+  if (entry.starting) return entry.starting;   // a start is already running — await it
+  if (entry.socket) return entry.socket;        // connecting (awaiting QR scan) — reuse, don't churn
+
+  entry.starting = _spawnSocket(tenantId, entry).finally(() => {
+    entry.starting = null;
+  });
+  return entry.starting;
+}
+
+async function _spawnSocket(tenantId, entry) {
+  if (entry.reconnectTimer) {
+    clearTimeout(entry.reconnectTimer);
+    entry.reconnectTimer = null;
   }
 
-  // Reuse existing entry (preserves qrCallbacks/statusCallbacks across reconnects) or create new
-  const entry = sessions.get(tenantId) || { socket: null, reconnectScheduled: false, qrCallbacks: new Set(), statusCallbacks: new Set(), lastQR: null };
-  if (!sessions.has(tenantId)) sessions.set(tenantId, entry);
+  // Supersede any prior socket FIRST so its handlers/persists are ignored.
+  const myEpoch = ++entry.epoch;
+  const isActive = () => entry.epoch === myEpoch;
 
-  const { state, saveCreds } = await useSupabaseAuthState(tenantId);
+  if (entry.socket) {
+    const old = entry.socket;
+    entry.socket = null;
+    try { old.ev.removeAllListeners('connection.update'); } catch (_) { /* already torn down */ }
+    try { old.ev.removeAllListeners('creds.update'); } catch (_) { /* already torn down */ }
+    try { old.end(undefined); } catch (_) { /* already closed */ }
+  }
+  entry.lastQR = null;
+
+  const { state, saveCreds } = await useSupabaseAuthState(tenantId, isActive);
   const { version } = await fetchLatestBaileysVersion();
+
+  // A newer start may have superseded us while awaiting — bail out.
+  if (!isActive()) return null;
 
   const sock = makeWASocket({
     version,
@@ -54,6 +90,7 @@ async function startSession(tenantId) {
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', async (update) => {
+    if (!isActive()) return; // stale socket generation — ignore everything
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
@@ -62,6 +99,7 @@ async function startSession(tenantId) {
     }
 
     if (connection === 'open') {
+      entry.retries = 0; // healthy connection resets backoff
       logger.info({ tenantId }, '[Baileys] Connected');
       const { error: upsertErr } = await supabase
         .from('baileys_sessions')
@@ -73,7 +111,7 @@ async function startSession(tenantId) {
     if (connection === 'close') {
       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const loggedOut = reason === DisconnectReason.loggedOut;
-      const wasConnected = Boolean(entry.socket?.user);
+      const wasConnected = Boolean(sock.user);
       logger.warn({ tenantId, reason, wasConnected }, '[Baileys] Disconnected');
 
       const { error: updateErr } = await supabase
@@ -85,25 +123,35 @@ async function startSession(tenantId) {
       const intentional = stoppedIntentionally.delete(tenantId);
 
       if (intentional || loggedOut) {
-        // Truly done — notify frontend and clean up
+        // Truly done — notify frontend and clean up.
+        entry.epoch++; // invalidate this generation
+        if (entry.reconnectTimer) { clearTimeout(entry.reconnectTimer); entry.reconnectTimer = null; }
         for (const cb of entry.statusCallbacks) cb('disconnected');
         sessions.delete(tenantId);
         if (loggedOut) {
           await supabase.from('baileys_sessions').delete().eq('tenant_id', tenantId);
         }
-      } else {
-        // QR expired or transient drop — null the socket, keep callbacks, reconnect silently
-        entry.socket = null;
-        entry.lastQR = null;
-        if (wasConnected) {
-          // Was actually in use — tell frontend it dropped
-          for (const cb of entry.statusCallbacks) cb('disconnected');
-        }
-        // 515 = restartRequired (normal after pairing) — reconnect immediately so WA doesn't timeout
-        const delay = reason === DisconnectReason.restartRequired ? 0 : 5000;
-        entry.reconnectScheduled = true;
-        setTimeout(() => startSession(tenantId), delay);
+        return;
       }
+
+      // QR expired or transient drop — null the socket, keep callbacks, reconnect with backoff.
+      entry.socket = null;
+      entry.lastQR = null;
+      if (wasConnected) {
+        for (const cb of entry.statusCallbacks) cb('disconnected'); // was in use — tell frontend
+      }
+
+      // 515 = restartRequired (normal after pairing) — reconnect immediately so WA doesn't timeout.
+      const delay = reason === DisconnectReason.restartRequired
+        ? 0
+        : Math.min(5000 * 2 ** entry.retries, MAX_RECONNECT_DELAY);
+      entry.retries += 1;
+      entry.reconnectTimer = setTimeout(() => {
+        entry.reconnectTimer = null;
+        startSession(tenantId).catch((err) =>
+          logger.error({ tenantId, err }, '[Baileys] Reconnect failed')
+        );
+      }, delay);
     }
   });
 
@@ -111,12 +159,22 @@ async function startSession(tenantId) {
 }
 
 function stopSession(tenantId) {
-  stoppedIntentionally.add(tenantId);
   const entry = sessions.get(tenantId);
-  if (entry?.socket) {
+  if (!entry) return;
+
+  if (entry.reconnectTimer) { clearTimeout(entry.reconnectTimer); entry.reconnectTimer = null; }
+
+  if (entry.socket) {
+    // Live socket: mark intentional and end it; the 'close' handler cleans up the entry.
+    stoppedIntentionally.add(tenantId);
     try { entry.socket.end(undefined); } catch (stopErr) { logger.warn({ stopErr }, '[Baileys] Error ending socket'); }
+  } else {
+    // Nothing live — invalidate any in-flight start and drop the entry directly so the
+    // intentional flag can never leak into a future session.
+    entry.epoch++;
+    for (const cb of entry.statusCallbacks) cb('disconnected');
+    sessions.delete(tenantId);
   }
-  // Don't delete entry here — connection.update 'close' handler will clean up after firing 'disconnected'
 }
 
 function getSocket(tenantId) {

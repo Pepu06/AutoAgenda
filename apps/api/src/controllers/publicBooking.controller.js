@@ -4,13 +4,13 @@ const { computeAvailableSlots } = require('../utils/availability');
 const { appointmentsQueue } = require('../workers/queue');
 const { JobName } = require('@autoagenda/shared');
 const { createCalendarEventInCalendar, refreshAccessToken } = require('../services/google');
-const { sendTemplate } = require('../services/whatsapp');
+const { sendMessage } = require('../services/whatsapp');
 const { normalizePhone } = require('../utils/phone');
 
 async function _getTenantBySlug(slug) {
   const { data, error } = await supabase
     .from('tenants')
-    .select('id, name, timezone, business_name, message_template, autoagenda_title, autoagenda_description, autoagenda_profile_image, autoagenda_enabled, admin_whatsapp, admin_alerts_enabled, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key')
+    .select('id, name, timezone, business_name, message_template, autoagenda_title, autoagenda_description, autoagenda_profile_image, autoagenda_enabled, admin_whatsapp, admin_alerts_enabled')
     .eq('slug', slug)
     .maybeSingle();
   if (error) throw error;
@@ -322,32 +322,17 @@ async function createBooking(req, res, next) {
     // Enqueue WhatsApp confirmation to client
     appointmentsQueue.add(JobName.SEND_CONFIRMATION, { appointmentId: appointment.id }).catch(() => {});
 
-    // Admin notification: nuevo_turno
+    // Admin notification: nuevo turno
     if (tenant.admin_alerts_enabled && tenant.admin_whatsapp) {
       try {
         const tz = tenant.timezone || 'America/Argentina/Buenos_Aires';
-        const weekday  = slotDate.toLocaleDateString('es-AR', { timeZone: tz, weekday: 'long' });
-        const dayMonth = slotDate.toLocaleDateString('es-AR', { timeZone: tz, day: 'numeric', month: 'numeric' });
-        const dateLabel = `${weekday} ${dayMonth}`;
+        const dateLabel = slotDate.toLocaleDateString('es-AR', { timeZone: tz, weekday: 'long', day: 'numeric', month: 'numeric' });
         const timeLabel = slotDate.toLocaleTimeString('es-AR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }) + ' hs';
-
-        const tenantConfig = {
-          provider:              tenant.whatsapp_provider || 'baileys',
-          tenantId:              tenant.id,
-          whatsappPhoneNumberId: tenant.whatsapp_phone_number_id,
-          whatsappAccessToken:   tenant.whatsapp_access_token,
-          wasender_api_key:      tenant.wasender_api_key,
-        };
-
         const { data: service } = await supabase.from('services').select('name').eq('id', type.service_id).single();
+        const serviceName = service?.name || type.title;
 
-        await sendTemplate(tenant.admin_whatsapp, 'nuevo_turno', [
-          name.trim(),
-          cleanPhone,
-          dateLabel,
-          timeLabel,
-          service?.name || type.title,
-        ], tenantConfig);
+        const alertText = `📅 *Nuevo turno agendado*\n\n👤 ${name.trim()}\n📞 ${cleanPhone}\n📅 ${dateLabel} a las ${timeLabel}\n💼 ${serviceName}`;
+        await sendMessage(tenant.id, tenant.admin_whatsapp, alertText);
       } catch { /* Non-fatal */ }
     }
 

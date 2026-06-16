@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { supabase } = require('@autoagenda/db');
-const { sendTextMessage, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
+const { sendMessage, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
 const { getCalendarEvent } = require('../services/google');
 const { getValidToken } = require('../controllers/calendar.controller');
 const logger = require('../config/logger');
@@ -134,7 +134,7 @@ async function runDailyReminders() {
       google_event_id,
       contact:contacts(name, phone),
       service:services(name),
-      tenant:tenants(business_name, message_template, reminder_template, messaging_enabled, timezone, time_format, reminder_type, reminder_time, whatsapp_provider, whatsapp_phone_number_id, whatsapp_access_token, wasender_api_key, location, location_mode)
+      tenant:tenants(business_name, message_template, reminder_template, messaging_enabled, timezone, time_format, reminder_type, reminder_time, location, location_mode)
     `)
     .in('status', ['pending', 'notified', 'sin_enviar'])
     .is('reminder_sent_at', null)
@@ -167,16 +167,7 @@ async function runDailyReminders() {
     if (deltaMs > 60 * 1000) continue;
 
     const encabezado = (appt.tenant?.business_name || 'AutoAgenda').slice(0, 40);
-    const mensajeEditable = (appt.tenant?.message_template || '').replace(/[\n\r\t]/g, ' ').replace(/ {5,}/g, '    ');
     const ubicacion = appt.tenant?.location || '';
-
-    const tenantConfig = {
-      provider: appt.tenant?.whatsapp_provider || 'baileys',
-      tenantId: appt.tenant_id,
-      whatsappPhoneNumberId: appt.tenant?.whatsapp_phone_number_id,
-      whatsappAccessToken: appt.tenant?.whatsapp_access_token,
-      wasender_api_key: appt.tenant?.wasender_api_key,
-    };
 
     try {
       const usageCheck = await checkUsageLimit(appt.tenant_id);
@@ -229,7 +220,7 @@ async function runDailyReminders() {
       const confirmLink = `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appt.id}`;
       const fullText = rendered + confirmLink;
 
-      const whatsappResponse = await sendTextMessage(appt.contact.phone, fullText, tenantConfig);
+      const whatsappResponse = await sendMessage(appt.tenant_id, appt.contact.phone, fullText);
 
       if (!whatsappResponse) {
         throw new Error('Baileys/WhatsApp no disponible para enviar el recordatorio');
