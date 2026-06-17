@@ -70,6 +70,7 @@ async function sendConfirmation({ appointmentId }) {
       logger.warn({ appointmentId, err: err.message }, 'Could not fetch calendar event location for confirmation');
     }
   }
+  if (!ubicacion) ubicacion = '-';
 
   const tmpl = appointment.tenant?.confirmation_template || DEFAULT_CONFIRMATION_TEMPLATE;
   const rendered = renderTemplate(tmpl, {

@@ -167,7 +167,19 @@ async function runDailyReminders() {
     if (deltaMs > 60 * 1000) continue;
 
     const encabezado = (appt.tenant?.business_name || 'AutoAgenda').slice(0, 40);
-    const ubicacion = appt.tenant?.location || '';
+    let ubicacion = appt.tenant?.location || '';
+    if (appt.tenant?.location_mode === 'calendar' && appt.google_event_id) {
+      const ownerData = await getOwnerTokenForTenant(appt.tenant_id, ownerTokenCache);
+      if (ownerData) {
+        try {
+          const gcalEvent = await getCalendarEvent(ownerData.accessToken, appt.google_event_id, ownerData.calendarId);
+          if (gcalEvent?.location) ubicacion = gcalEvent.location;
+        } catch (err) {
+          logger.warn({ appointmentId: appt.id, err: err.message }, 'Could not fetch calendar event location for reminder');
+        }
+      }
+    }
+    if (!ubicacion) ubicacion = '-';
 
     try {
       const usageCheck = await checkUsageLimit(appt.tenant_id);
