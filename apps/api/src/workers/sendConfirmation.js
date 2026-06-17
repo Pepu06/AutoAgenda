@@ -1,6 +1,5 @@
 const { supabase } = require('@autoagenda/db');
 const { sendMessage, renderTemplate, DEFAULT_CONFIRMATION_TEMPLATE } = require('../services/whatsapp');
-const env = require('../config/env');
 const { getCalendarEvent, refreshAccessToken } = require('../services/google');
 const logger = require('../config/logger');
 const { formatTime } = require('../utils/datetime');
@@ -82,8 +81,7 @@ async function sendConfirmation({ appointmentId }) {
     negocio:      appointment.tenant?.business_name || '',
     recordatorio: recordatorioTexto,
   });
-  const confirmLink = `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointmentId}`;
-  const fullText = rendered + confirmLink;
+  const fullText = rendered;
 
   const whatsappResponse = await sendMessage(appointment.tenant_id, appointment.contact.phone, fullText);
 
