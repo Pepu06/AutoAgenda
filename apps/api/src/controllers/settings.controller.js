@@ -13,7 +13,10 @@ const ALLOWED_FIELDS = [
   'gonzalez_soro_whatsapp_enabled',
 ];
 
-const SELECT_COLS = ['id', 'name', ...ALLOWED_FIELDS].join(', ');
+// Read-only flag — not in ALLOWED_FIELDS so tenants can't modify it themselves
+const READONLY_FIELDS = ['has_inmobiliaria_integration'];
+
+const SELECT_COLS = ['id', 'name', ...ALLOWED_FIELDS, ...READONLY_FIELDS].join(', ');
 
 async function getSettings(req, res, next) {
   try {

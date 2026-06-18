@@ -42,6 +42,7 @@ const DEFAULTS = {
   confirmationTemplate: '',
   gonzalezSoroWebhookEnabled: false,
   gonzalezSoroWhatsappEnabled: false,
+  hasInmobiliariaIntegration: false,
 };
 
 const WEEK_DAYS = [
@@ -113,6 +114,7 @@ export default function SettingsPage() {
       if (d.confirmationTemplate != null) mapped.confirmationTemplate = d.confirmationTemplate;
       if (d.gonzalezSoroWebhookEnabled != null) mapped.gonzalezSoroWebhookEnabled = d.gonzalezSoroWebhookEnabled;
       if (d.gonzalezSoroWhatsappEnabled != null) mapped.gonzalezSoroWhatsappEnabled = d.gonzalezSoroWhatsappEnabled;
+      if (d.hasInmobiliariaIntegration != null) mapped.hasInmobiliariaIntegration = d.hasInmobiliariaIntegration;
       setSettings(s => ({ ...s, ...mapped }));
       isLoadedRef.current = true;
     }).catch(() => { }).finally(() => setLoading(false));
@@ -562,8 +564,8 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* SISTEMA INMOBILIARIA */}
-      <section className={styles.section}>
+      {/* SISTEMA INMOBILIARIA — solo visible si el tenant tiene has_inmobiliaria_integration=true */}
+      {settings.hasInmobiliariaIntegration && <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Sistema inmobiliaria</h2>
           <p className={styles.sectionDesc}>Enviá las citas agendadas automáticamente al sistema de gestión inmobiliaria</p>
@@ -586,7 +588,7 @@ export default function SettingsPage() {
             </div>
           </Field>
         </div>
-      </section>
+      </section>}
 
       {/* ZONA DE PELIGRO */}
       <section className={styles.section}>
