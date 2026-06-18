@@ -8,6 +8,7 @@ const { appointmentsQueue } = require('../workers/queue');
 const { trackMessageSent } = require('../workers/usageTracking');
 const { checkUsageLimit } = require('../middleware/checkUsage');
 const { JobName } = require('@autoagenda/shared');
+const { notifyAppointment } = require('../services/gonzalezSoroWebhook');
 const { AppError, ValidationError } = require('../errors');
 const { formatTime, formatTemplateHour } = require('../utils/datetime');
 
@@ -590,7 +591,7 @@ async function createEvent(req, res, next) {
 
     const { data: tenantSettings, error: tenantSettingsError } = await supabase
       .from('tenants')
-      .select('business_name, message_template, timezone, reminder_type, reminder_time, location_mode')
+      .select('business_name, message_template, timezone, reminder_type, reminder_time, location_mode, gonzalez_soro_webhook_enabled')
       .eq('id', req.tenantId)
       .single();
     if (tenantSettingsError) throw tenantSettingsError;
@@ -642,6 +643,16 @@ async function createEvent(req, res, next) {
       appointmentsQueue.add(name, { appointmentId: appointment.id }, opts).catch(() => { });
 
     queueJob(JobName.SEND_CONFIRMATION, { attempts: 5, backoff: { type: 'exponential', delay: 8000 } });
+
+    console.log('[calendar/createEvent] gonzalez_soro_webhook_enabled:', tenantSettings.gonzalez_soro_webhook_enabled);
+    if (tenantSettings.gonzalez_soro_webhook_enabled) {
+      notifyAppointment({
+        appointment: { id: appointment.id, scheduledAt: appointment.scheduled_at, notes: appointment.notes },
+        contact: { id: contact.id, name: contact.name, phone: contact.phone, email: contact.email },
+        service: { id: service.id, name: service.name },
+        tenant: { businessName: tenantSettings.business_name },
+      });
+    }
 
     return res.status(201).json({ success: true, data: convertKeys(appointment) });
   } catch (err) { return next(err); }
