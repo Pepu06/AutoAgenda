@@ -73,6 +73,7 @@ app.use('/', paymentProofsRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/autoagenda', autoagendaRoutes);
 app.use('/baileys', require('./routes/baileys.routes'));
+app.use('/integrations', require('./routes/integrations.routes'));
 
 // Sentry error handler must come before other error middleware
 if (env.SENTRY_DSN && env.NODE_ENV === 'production') {

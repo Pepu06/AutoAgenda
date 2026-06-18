@@ -41,6 +41,7 @@ const DEFAULTS = {
   reminderTemplate: '',
   confirmationTemplate: '',
   gonzalezSoroWebhookEnabled: false,
+  gonzalezSoroWhatsappEnabled: false,
 };
 
 const WEEK_DAYS = [
@@ -111,6 +112,7 @@ export default function SettingsPage() {
       if (d.reminderTemplate != null) mapped.reminderTemplate = d.reminderTemplate;
       if (d.confirmationTemplate != null) mapped.confirmationTemplate = d.confirmationTemplate;
       if (d.gonzalezSoroWebhookEnabled != null) mapped.gonzalezSoroWebhookEnabled = d.gonzalezSoroWebhookEnabled;
+      if (d.gonzalezSoroWhatsappEnabled != null) mapped.gonzalezSoroWhatsappEnabled = d.gonzalezSoroWhatsappEnabled;
       setSettings(s => ({ ...s, ...mapped }));
       isLoadedRef.current = true;
     }).catch(() => { }).finally(() => setLoading(false));
@@ -156,6 +158,7 @@ export default function SettingsPage() {
         reminder_template:     settings.reminderTemplate || null,
         confirmation_template: settings.confirmationTemplate || null,
         gonzalez_soro_webhook_enabled: settings.gonzalezSoroWebhookEnabled,
+        gonzalez_soro_whatsapp_enabled: settings.gonzalezSoroWhatsappEnabled,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -571,6 +574,14 @@ export default function SettingsPage() {
               <Switch checked={settings.gonzalezSoroWebhookEnabled} onChange={v => set('gonzalezSoroWebhookEnabled', v)} />
               <span className={styles.switchLabel}>
                 {settings.gonzalezSoroWebhookEnabled ? 'Activo — las citas se envían al sistema inmobiliario' : 'Inactivo'}
+              </span>
+            </div>
+          </Field>
+          <Field label="Envío de WhatsApp por Autoagenda" hint="Permite que el sistema inmobiliario use tu sesión de WhatsApp para enviar encuestas a visitantes.">
+            <div className={styles.switchRow}>
+              <Switch checked={settings.gonzalezSoroWhatsappEnabled} onChange={v => set('gonzalezSoroWhatsappEnabled', v)} />
+              <span className={styles.switchLabel}>
+                {settings.gonzalezSoroWhatsappEnabled ? 'Activo — el sistema inmobiliario puede enviar mensajes por tu WhatsApp' : 'Inactivo'}
               </span>
             </div>
           </Field>
