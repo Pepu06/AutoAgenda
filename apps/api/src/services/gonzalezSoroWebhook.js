@@ -1,16 +1,15 @@
 const https = require('https');
 const http = require('http');
 
-/**
- * Fire-and-forget POST to GonzalezSoro webhook.
- * Never throws — logs on failure.
- */
-async function notifyAppointment({ appointment, contact, service }) {
+async function notifyAppointment({ appointment, contact, service, tenant }) {
   const url = process.env.GONZALEZ_SORO_WEBHOOK_URL;
   const secret = process.env.AUTOAGENDA_WEBHOOK_SECRET;
+
+  console.log('[gonzalezSoroWebhook] url:', url ? 'set' : 'NOT SET');
   if (!url) return;
 
-  const body = JSON.stringify({ appointment, contact, service });
+  const body = JSON.stringify({ appointment, contact, service, tenant });
+  console.log('[gonzalezSoroWebhook] firing → tenant:', tenant?.businessName, 'appointment:', appointment?.id);
 
   try {
     await new Promise((resolve, reject) => {
@@ -29,8 +28,12 @@ async function notifyAppointment({ appointment, contact, service }) {
           },
         },
         (res) => {
-          res.resume();
-          res.on('end', resolve);
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            console.log('[gonzalezSoroWebhook] response status:', res.statusCode, 'body:', data.slice(0, 200));
+            resolve();
+          });
         }
       );
       req.on('error', reject);

@@ -71,6 +71,7 @@ async function create(req, res, next) {
 
     queueJob(JobName.SEND_CONFIRMATION, { attempts: 5, backoff: { type: 'exponential', delay: 8000 } });
 
+    console.log('[appointments] gonzalez_soro_webhook_enabled:', tenant.gonzalez_soro_webhook_enabled);
     if (tenant.gonzalez_soro_webhook_enabled) {
       notifyAppointment({
         appointment: { id: data.id, scheduledAt: data.scheduled_at, notes: data.notes },
