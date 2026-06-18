@@ -40,6 +40,7 @@ const DEFAULTS = {
   baileysConnected: false,
   reminderTemplate: '',
   confirmationTemplate: '',
+  gonzalezSoroWebhookEnabled: false,
 };
 
 const WEEK_DAYS = [
@@ -109,6 +110,7 @@ export default function SettingsPage() {
       if (d.baileysConnected != null) mapped.baileysConnected = d.baileysConnected;
       if (d.reminderTemplate != null) mapped.reminderTemplate = d.reminderTemplate;
       if (d.confirmationTemplate != null) mapped.confirmationTemplate = d.confirmationTemplate;
+      if (d.gonzalezSoroWebhookEnabled != null) mapped.gonzalezSoroWebhookEnabled = d.gonzalezSoroWebhookEnabled;
       setSettings(s => ({ ...s, ...mapped }));
       isLoadedRef.current = true;
     }).catch(() => { }).finally(() => setLoading(false));
@@ -153,6 +155,7 @@ export default function SettingsPage() {
         cancel_reply_message:  settings.cancelReplyMessage,
         reminder_template:     settings.reminderTemplate || null,
         confirmation_template: settings.confirmationTemplate || null,
+        gonzalez_soro_webhook_enabled: settings.gonzalezSoroWebhookEnabled,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -552,6 +555,24 @@ export default function SettingsPage() {
                 )}
               </div>
             )}
+          </Field>
+        </div>
+      </section>
+
+      {/* SISTEMA INMOBILIARIA */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Sistema inmobiliaria</h2>
+          <p className={styles.sectionDesc}>Enviá las citas agendadas automáticamente al sistema de gestión inmobiliaria</p>
+        </div>
+        <div className={styles.fields}>
+          <Field label="Sincronización de visitas">
+            <div className={styles.switchRow}>
+              <Switch checked={settings.gonzalezSoroWebhookEnabled} onChange={v => set('gonzalezSoroWebhookEnabled', v)} />
+              <span className={styles.switchLabel}>
+                {settings.gonzalezSoroWebhookEnabled ? 'Activo — las citas se envían al sistema inmobiliario' : 'Inactivo'}
+              </span>
+            </div>
           </Field>
         </div>
       </section>

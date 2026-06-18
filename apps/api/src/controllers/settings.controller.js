@@ -9,6 +9,7 @@ const ALLOWED_FIELDS = [
   'report_days', 'report_type',
   'location_mode', 'location',
   'confirm_reply_message', 'cancel_reply_message',
+  'gonzalez_soro_webhook_enabled',
 ];
 
 const SELECT_COLS = ['id', 'name', ...ALLOWED_FIELDS].join(', ');

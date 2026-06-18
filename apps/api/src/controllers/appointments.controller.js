@@ -5,6 +5,7 @@ const { appointmentsQueue } = require('../workers/queue');
 const { JobName } = require('@autoagenda/shared');
 const { updateEventColor, updateCalendarEventDateTime, refreshAccessToken, getCalendarEvents, deleteCalendarEvent } = require('../services/google');
 const { getValidToken, getOwnerCalendarId } = require('./calendar.controller');
+const { notifyAppointment } = require('../services/gonzalezSoroWebhook');
 
 const APPOINTMENT_SELECT = '*, contact:contacts(*), service:services(*), user:users(*)';
 const REMINDER_CONFIG_ERROR = 'Completá el Nombre del negocio en Configuración para poder crear citas y enviar recordatorios.';
@@ -43,7 +44,7 @@ async function create(req, res, next) {
 
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('business_name, message_template')
+      .select('business_name, message_template, gonzalez_soro_webhook_enabled')
       .eq('id', req.tenantId)
       .single();
     if (tenantError) throw tenantError;
@@ -69,6 +70,15 @@ async function create(req, res, next) {
       appointmentsQueue.add(name, { appointmentId: data.id }, opts).catch(() => {});
 
     queueJob(JobName.SEND_CONFIRMATION, { attempts: 5, backoff: { type: 'exponential', delay: 8000 } });
+
+    if (tenant.gonzalez_soro_webhook_enabled) {
+      notifyAppointment({
+        appointment: { id: data.id, scheduledAt: data.scheduled_at, notes: data.notes },
+        contact: { id: data.contact?.id, name: data.contact?.name, phone: data.contact?.phone, email: data.contact?.email, dni: data.contact?.dni },
+        service: { id: data.service?.id, name: data.service?.name },
+        tenant: { businessName: tenant.business_name },
+      });
+    }
 
     return res.status(201).json({ success: true, data: convertKeys(data) });
   } catch (err) { return next(err); }
@@ -136,6 +146,16 @@ async function update(req, res, next) {
           logger.warn({ err: e }, '[GCal] Failed to sync appointment update');
         }
       })();
+    }
+
+    const { data: tenantData } = await supabase.from('tenants').select('business_name, gonzalez_soro_webhook_enabled').eq('id', req.tenantId).single();
+    if (tenantData?.gonzalez_soro_webhook_enabled) {
+      notifyAppointment({
+        appointment: { id: data.id, scheduledAt: data.scheduled_at, notes: data.notes },
+        contact: { id: data.contact?.id, name: data.contact?.name, phone: data.contact?.phone, email: data.contact?.email, dni: data.contact?.dni },
+        service: { id: data.service?.id, name: data.service?.name },
+        tenant: { businessName: tenantData.business_name },
+      });
     }
 
     return res.json({ success: true, data: convertKeys(data) });
