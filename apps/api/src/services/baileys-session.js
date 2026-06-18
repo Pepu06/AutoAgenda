@@ -15,6 +15,11 @@ const logger = require('../config/logger');
 // reconnects (prevents WA 440 conflicts and auth-state corruption).
 const sessions = new Map();
 const stoppedIntentionally = new Set();
+// Tenants being put to sleep: close without reconnect and without clearing DB creds.
+const sleepingTenants = new Set();
+
+// After this many ms of no inbound/outbound activity the session is slept to free RAM.
+const INACTIVITY_MS = 15 * 60 * 1000; // 15 minutes
 
 const MAX_RECONNECT_DELAY = 60_000;
 
@@ -26,6 +31,7 @@ function getEntry(tenantId) {
       epoch: 0,            // bumps each socket generation; stale handlers self-cancel
       starting: null,      // in-flight start promise (single-flight guard)
       reconnectTimer: null,
+      inactivityTimer: null, // cleared on any message activity, triggers sleepSession on expiry
       retries: 0,
       qrCallbacks: new Set(),
       statusCallbacks: new Set(),
@@ -89,6 +95,12 @@ async function _spawnSocket(tenantId, entry) {
 
   sock.ev.on('creds.update', saveCreds);
 
+  // Reset inactivity timer on any received message.
+  sock.ev.on('messages.upsert', () => {
+    if (!isActive()) return;
+    resetInactivityTimer(tenantId);
+  });
+
   sock.ev.on('connection.update', async (update) => {
     if (!isActive()) return; // stale socket generation — ignore everything
     const { connection, lastDisconnect, qr } = update;
@@ -100,6 +112,7 @@ async function _spawnSocket(tenantId, entry) {
 
     if (connection === 'open') {
       entry.retries = 0; // healthy connection resets backoff
+      resetInactivityTimer(tenantId);
       logger.info({ tenantId }, '[Baileys] Connected');
       const { error: upsertErr } = await supabase
         .from('baileys_sessions')
@@ -119,6 +132,15 @@ async function _spawnSocket(tenantId, entry) {
         .update({ connected: false, updated_at: new Date().toISOString() })
         .eq('tenant_id', tenantId);
       if (updateErr) logger.error({ tenantId, err: updateErr }, '[Baileys] Failed to update connected=false');
+
+      // Sleep path: free RAM without touching DB creds or notifying frontend.
+      if (sleepingTenants.delete(tenantId)) {
+        logger.info({ tenantId }, '[Baileys] Session asleep — RAM freed, creds intact');
+        entry.epoch++;
+        if (entry.reconnectTimer) { clearTimeout(entry.reconnectTimer); entry.reconnectTimer = null; }
+        sessions.delete(tenantId);
+        return;
+      }
 
       const intentional = stoppedIntentionally.delete(tenantId);
 
@@ -156,6 +178,100 @@ async function _spawnSocket(tenantId, entry) {
   });
 
   return sock;
+}
+
+// Resets (or starts) the inactivity countdown. Call after any send or receive.
+function resetInactivityTimer(tenantId) {
+  const entry = sessions.get(tenantId);
+  if (!entry) return;
+  if (entry.inactivityTimer) clearTimeout(entry.inactivityTimer);
+  entry.inactivityTimer = setTimeout(() => {
+    entry.inactivityTimer = null;
+    sleepSession(tenantId);
+  }, INACTIVITY_MS);
+}
+
+// Frees the socket from RAM without deleting credentials from the DB.
+// The next sendMessage call will reconnect transparently (wake on demand).
+function sleepSession(tenantId) {
+  const entry = sessions.get(tenantId);
+  if (!entry) return;
+
+  logger.info({ tenantId }, '[Baileys] Sleeping session (inactivity timeout)');
+
+  if (entry.inactivityTimer) { clearTimeout(entry.inactivityTimer); entry.inactivityTimer = null; }
+  if (entry.reconnectTimer) { clearTimeout(entry.reconnectTimer); entry.reconnectTimer = null; }
+
+  if (entry.socket) {
+    sleepingTenants.add(tenantId);
+    try { entry.socket.end(undefined); } catch (_) {}
+  } else {
+    // No live socket (e.g., mid-reconnect): invalidate and drop directly.
+    entry.epoch++;
+    sessions.delete(tenantId);
+  }
+}
+
+// Ensures a connected socket exists, starting (or waking) the session if needed.
+// Returns null if no credentials are stored or the tenant has never linked WhatsApp.
+// Rejects on timeout so callers can fall through gracefully.
+async function getOrConnectedSocket(tenantId, timeoutMs = 30_000) {
+  // Fast path: already connected.
+  if (isConnected(tenantId)) {
+    resetInactivityTimer(tenantId);
+    return getSocket(tenantId);
+  }
+
+  // Guard: don't spin up a socket that will just wait for a QR nobody will scan.
+  const { data } = await supabase
+    .from('baileys_sessions')
+    .select('creds_json')
+    .eq('tenant_id', tenantId)
+    .single();
+
+  if (!data?.creds_json) {
+    logger.debug({ tenantId }, '[Baileys] No stored credentials — wake skipped');
+    return null;
+  }
+
+  // Wake the session (or reuse an in-flight start).
+  await startSession(tenantId);
+
+  // Re-check: startSession may have connected synchronously from warm creds.
+  if (isConnected(tenantId)) {
+    resetInactivityTimer(tenantId);
+    return getSocket(tenantId);
+  }
+
+  // Wait for the connection.update 'open' event with a hard timeout.
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      removeStatus();
+      reject(new Error(`[Baileys] Wake timeout for tenant ${tenantId} after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    const removeStatus = onStatus(tenantId, (status) => {
+      if (status === 'connected') {
+        clearTimeout(timer);
+        removeStatus();
+        resetInactivityTimer(tenantId);
+        resolve(getSocket(tenantId));
+      } else if (status === 'disconnected') {
+        clearTimeout(timer);
+        removeStatus();
+        resolve(null); // Creds invalid / logged out — caller will skip send.
+      }
+    });
+
+    // The session may have died between startSession and onStatus (e.g. logged out
+    // mid-wake), in which case onStatus registered on a now-deleted entry and no
+    // event will ever fire. Bail out immediately instead of hanging until timeout.
+    if (!sessions.has(tenantId)) {
+      clearTimeout(timer);
+      removeStatus();
+      resolve(null);
+    }
+  });
 }
 
 function stopSession(tenantId) {
@@ -216,4 +332,15 @@ async function restoreAllSessions() {
   }
 }
 
-module.exports = { startSession, stopSession, getSocket, isConnected, onQR, onStatus, restoreAllSessions };
+module.exports = {
+  startSession,
+  stopSession,
+  sleepSession,
+  getSocket,
+  getOrConnectedSocket,
+  resetInactivityTimer,
+  isConnected,
+  onQR,
+  onStatus,
+  restoreAllSessions,
+};

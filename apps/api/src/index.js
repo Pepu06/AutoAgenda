@@ -10,7 +10,7 @@ const { startMonthlyBillingCron } = require('./workers/monthlyBillingCron');
 const { startSubscriptionRenewalCron } = require('./workers/subscriptionRenewalCron');
 const { startCalendarWatchRenewalCron } = require('./workers/calendarWatchRenewalCron');
 const { startAppointmentCleanupCron } = require('./workers/appointmentCleanupCron');
-const { restoreAllSessions } = require('./services/baileys-session');
+require('./services/baileys-session'); // registers module; sessions start lazily
 
 logger.info(`[Boot] Queue: ${env.REDIS_URL ? 'enabled' : 'disabled'}`);
 
@@ -26,9 +26,8 @@ app.listen(env.PORT, () => {
   startSubscriptionRenewalCron();
   startCalendarWatchRenewalCron();
   startAppointmentCleanupCron();
-  if (env.BAILEYS_ENABLED) {
-    restoreAllSessions().catch(err => logger.error({ err }, '[Baileys] Session restore failed'));
-  } else {
-    logger.info('[Baileys] Disabled in this environment (BAILEYS_ENABLED=false) — skipping session restore');
+  if (!env.BAILEYS_ENABLED) {
+    logger.info('[Baileys] Disabled in this environment (BAILEYS_ENABLED=false)');
   }
+  // Sessions start lazily (wake on demand). No bulk restore on boot — keeps RAM low on Railway.
 });

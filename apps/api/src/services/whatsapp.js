@@ -1,5 +1,6 @@
 const logger = require('../config/logger');
-const { getSocket } = require('./baileys-session');
+const env = require('../config/env');
+const { getOrConnectedSocket, resetInactivityTimer } = require('./baileys-session');
 
 const BAILEYS_SEND_TIMEOUT_MS = 20_000;
 
@@ -27,7 +28,20 @@ function renderTemplate(template, vars) {
 }
 
 async function sendMessage(tenantId, phone, text) {
-  const sock = getSocket(tenantId);
+  if (!env.BAILEYS_ENABLED) {
+    logger.info({ tenantId, phone }, '[Baileys] Disabled in this environment — message skipped');
+    return null;
+  }
+
+  // Wake session on demand if it is sleeping or was never started.
+  let sock;
+  try {
+    sock = await getOrConnectedSocket(tenantId);
+  } catch (wakeErr) {
+    logger.warn({ tenantId, phone, err: wakeErr.message }, '[Baileys] Wake timeout — message skipped');
+    return null;
+  }
+
   if (!sock?.user) {
     logger.warn({ tenantId, phone }, '[Baileys] No active session — message skipped');
     return null;
@@ -45,6 +59,9 @@ async function sendMessage(tenantId, phone, text) {
   }
 
   const jid = normalizedPhone + '@s.whatsapp.net';
+  // Reset the clock right before sending so the inactivity timer can't fire
+  // mid-send (sendMessage may take up to 20s).
+  resetInactivityTimer(tenantId);
   logger.info({ tenantId, jid, textLength: text?.length }, '[Baileys] Enviando mensaje...');
   let timeoutId;
   try {
@@ -59,6 +76,7 @@ async function sendMessage(tenantId, phone, text) {
       timeoutPromise,
     ]);
     logger.info({ tenantId, jid, messageId: result?.key?.id }, '[Baileys] Mensaje enviado');
+    resetInactivityTimer(tenantId);
     return result;
   } catch (err) {
     logger.error({ tenantId, jid, err: err?.message }, '[Baileys] Error en sendMessage');
