@@ -87,7 +87,7 @@ async function _spawnSocket(tenantId, entry) {
     fireInitQueries: false,
     markOnlineOnConnect: false,
     syncFullHistory: false,
-    logger: logger.child({ baileys: tenantId, level: 'warn' }),
+    logger: logger.child({ baileys: tenantId }, { level: 'warn' }),
     browser: Browsers.ubuntu('Chrome'),
   });
 
