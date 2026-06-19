@@ -283,7 +283,7 @@ async function setDefaultCalendar(req, res, next) {
 
 async function runCalendarSync(userId, tenantId) {
   const { data: tenantSettings } = await supabase
-    .from('tenants').select('business_name, message_template').eq('id', tenantId).single();
+    .from('tenants').select('business_name, message_template, gonzalez_soro_webhook_enabled').eq('id', tenantId).single();
   if (!hasReminderConfig(tenantSettings)) return { created: 0 };
 
   const accessToken = await getValidToken(userId);
@@ -375,6 +375,15 @@ async function runCalendarSync(userId, tenantId) {
     if (appointment) {
       syncedIds.add(event.id);
       appointmentsQueue.add(JobName.SEND_CONFIRMATION, { appointmentId: appointment.id }, { attempts: 5, backoff: { type: 'exponential', delay: 8000 } }).catch(() => {});
+      if (tenantSettings.gonzalez_soro_webhook_enabled) {
+        const { email: contactEmail } = extractDataFromDescription(event.description);
+        notifyAppointment({
+          appointment: { id: appointment.id, scheduledAt: new Date(event.start).toISOString(), notes: eventNotes },
+          contact: { id: contact.id, name: contact.name, phone: contact.phone, email: contactEmail },
+          service: { id: service.id, name: service.name },
+          tenant: { businessName: tenantSettings.business_name },
+        });
+      }
       created++;
     }
   }
