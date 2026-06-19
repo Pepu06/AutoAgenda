@@ -1,6 +1,6 @@
 const { supabase, convertKeys } = require('@autoagenda/db');
 const logger = require('../config/logger');
-const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor, createCalendarEvent, listCalendars, watchCalendar, stopCalendarWatch } = require('../services/google');
+const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor, createCalendarEvent, listCalendars, watchCalendar, stopCalendarWatch, updateEventDescription } = require('../services/google');
 const env = require('../config/env');
 const crypto = require('crypto');
 const { sendMessage, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
@@ -105,6 +105,26 @@ function hasReminderConfig(tenant) {
 }
 
 const REMINDER_CONFIG_ERROR = 'Completá el Nombre del negocio en Configuración para poder crear citas y enviar recordatorios.';
+
+// Standard Autoagenda header lines in GCal description
+const HEADER_LINE_RE = /^(Nombre|Tel[eé]fono|Mail|Email)\s*:/i;
+
+function buildDescription(contact, notes) {
+  const header = [
+    `Nombre: ${contact.name}`,
+    `Teléfono: [${contact.phone}]`,
+    ...(contact.email ? [`Mail: ${contact.email}`] : []),
+  ].join('\n');
+  return notes ? `${header}\n\n${notes}` : header;
+}
+
+function extractNotesFromDescription(description = '') {
+  const lines = (description || '').split('\n');
+  // Skip leading header lines and blank lines
+  let i = 0;
+  while (i < lines.length && (HEADER_LINE_RE.test(lines[i]) || lines[i].trim() === '')) i++;
+  return lines.slice(i).join('\n').trim() || null;
+}
 
 /**
  * Returns the owner's chosen default calendar ID for a tenant.
@@ -345,15 +365,32 @@ async function runCalendarSync(userId, tenantId) {
       ? Math.round((new Date(event.end) - new Date(event.start)) / 60000) : 30;
     const { service: titleService } = extractFromTitle(event.title);
     const service = await matchService(titleService, duration);
+    const eventNotes = extractNotesFromDescription(event.description);
     const { data: appointment } = await supabase.from('appointments').insert({
       tenant_id: tenantId, contact_id: contact.id, service_id: service.id,
       user_id: userId, scheduled_at: new Date(event.start).toISOString(),
       status: 'sin_enviar', google_event_id: event.id,
+      ...(eventNotes ? { notes: eventNotes } : {}),
     }).select('id').single();
     if (appointment) {
       syncedIds.add(event.id);
       appointmentsQueue.add(JobName.SEND_CONFIRMATION, { appointmentId: appointment.id }, { attempts: 5, backoff: { type: 'exponential', delay: 8000 } }).catch(() => {});
       created++;
+    }
+  }
+
+  // Sync notes from description back to existing appointments
+  const existingEvents = items.filter(e => syncedIds.has(e.id));
+  for (const e of existingEvents) {
+    const notes = extractNotesFromDescription(e.description);
+    const { data: existing } = await supabase
+      .from('appointments')
+      .select('id, notes')
+      .eq('google_event_id', e.id)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    if (existing && (existing.notes || null) !== (notes || null)) {
+      await supabase.from('appointments').update({ notes: notes || null }).eq('id', existing.id);
     }
   }
 
@@ -627,7 +664,7 @@ async function createEvent(req, res, next) {
 
       const calEvent = await createCalendarEvent(accessToken, {
         summary: `${contact.name} - ${service.name}`,
-        description: `Nombre: ${contact.name}\nTeléfono: [${contact.phone}]${contact.email ? `\nMail: ${contact.email}` : ''}`,
+        description: buildDescription(contact, notes),
         startDateTime: startDate.toISOString(),
         endDateTime: endDate.toISOString(),
         attendees,
@@ -683,6 +720,19 @@ async function updateCalendarEvent(req, res, next) {
       const end = new Date(start.getTime() + durationMinutes * 60000);
       const { updateCalendarEventDateTime } = require('../services/google');
       await updateCalendarEventDateTime(accessToken, eventId, start.toISOString(), end.toISOString(), defaultCalendarId);
+    }
+
+    // Sync notes → GCal description
+    if (notes !== undefined) {
+      const event = await getCalendarEvent(accessToken, eventId, defaultCalendarId).catch(() => null);
+      if (event) {
+        const contactData = {
+          name: extractFromTitle(event.summary || '').name,
+          phone: extractDataFromDescription(event.description || '').phone || '',
+          email: extractDataFromDescription(event.description || '').email,
+        };
+        updateEventDescription(accessToken, eventId, buildDescription(contactData, notes || null), defaultCalendarId).catch(() => {});
+      }
     }
 
     // Update Supabase appointment

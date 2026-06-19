@@ -255,6 +255,19 @@ async function deleteCalendarEvent(accessToken, eventId, calendarId = 'primary')
   return res.ok || res.status === 404 || res.status === 410;
 }
 
+async function updateEventDescription(accessToken, eventId, description, calendarId = 'primary') {
+  const url = `${CAL_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ description }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(`GCal PATCH description failed (${res.status}): ${data?.error?.message || ''}`);
+  }
+}
+
 async function stopCalendarWatch(accessToken, channelId, resourceId) {
   const res = await fetch(`${CAL_BASE}/channels/stop`, {
     method: 'POST',
@@ -280,4 +293,5 @@ module.exports = {
   watchCalendar,
   stopCalendarWatch,
   deleteCalendarEvent,
+  updateEventDescription,
 };
