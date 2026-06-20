@@ -82,10 +82,22 @@ async function checkDailyReports() {
     const reportType = tenant.report_type || 'morning';
     const reportTime = tenant.admin_daily_report_time;
 
-    if (!reportTime) continue;
-    if (!isTodayInReportDays(tenant.report_days)) continue;
-    if (!isValidReportTime(reportTime, reportType)) continue;
-    if (!isTimeMatch(reportTime, tz)) continue;
+    if (!reportTime) {
+      logger.debug({ tenantId: tenant.id }, '[DailyReport] Skip: no admin_daily_report_time');
+      continue;
+    }
+    if (!isTodayInReportDays(tenant.report_days)) {
+      logger.debug({ tenantId: tenant.id, report_days: tenant.report_days, today: new Date().getDay() }, '[DailyReport] Skip: today not in report_days');
+      continue;
+    }
+    if (!isValidReportTime(reportTime, reportType)) {
+      logger.warn({ tenantId: tenant.id, reportTime, reportType }, '[DailyReport] Skip: time not valid for report type');
+      continue;
+    }
+    if (!isTimeMatch(reportTime, tz)) {
+      logger.debug({ tenantId: tenant.id, reportTime, tz }, '[DailyReport] Skip: time mismatch');
+      continue;
+    }
 
     try {
       await sendDailyReport({ tenantId: tenant.id, reportType });

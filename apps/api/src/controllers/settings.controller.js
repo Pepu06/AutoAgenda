@@ -153,4 +153,18 @@ async function updateOnboarding(req, res, next) {
   } catch (err) { return next(err); }
 }
 
-module.exports = { getSettings, updateSettings, deleteAccount, getOnboarding, updateOnboarding };
+async function triggerDailyReport(req, res, next) {
+  try {
+    const { sendDailyReport } = require('../workers/sendDailyReport');
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('report_type')
+      .eq('id', req.tenantId)
+      .single();
+    const reportType = req.body?.reportType || tenant?.report_type || 'morning';
+    await sendDailyReport({ tenantId: req.tenantId, reportType });
+    return res.json({ success: true, reportType });
+  } catch (err) { return next(err); }
+}
+
+module.exports = { getSettings, updateSettings, deleteAccount, getOnboarding, updateOnboarding, triggerDailyReport };

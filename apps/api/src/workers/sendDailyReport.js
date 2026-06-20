@@ -34,18 +34,22 @@ async function sendDailyReport({ tenantId, reportType }) {
   const now = new Date();
 
   // Morning → today's agenda. Evening → tomorrow's preview.
-  const localNow = new Date(now.toLocaleString('en-US', { timeZone: tz }));
-  const targetDate = new Date(localNow);
-  if (reportType === 'evening') targetDate.setDate(targetDate.getDate() + 1);
+  // Get the target local date string in the tenant's timezone
+  const todayLocalStr = now.toLocaleDateString('en-CA', { timeZone: tz }); // "YYYY-MM-DD"
+  let [year, month, day] = todayLocalStr.split('-').map(Number);
+  if (reportType === 'evening') {
+    const d = new Date(Date.UTC(year, month - 1, day + 1));
+    year = d.getUTCFullYear(); month = d.getUTCMonth() + 1; day = d.getUTCDate();
+  }
+  // targetDate is only used for the human-readable dateLabel
+  const targetDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 
-  const dayStart = new Date(targetDate);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(targetDate);
-  dayEnd.setHours(23, 59, 59, 999);
-
-  // Convert local midnight boundaries to UTC for the query
-  const startUTC = new Date(dayStart.toLocaleString('en-US', { timeZone: tz }));
-  const endUTC   = new Date(dayEnd.toLocaleString('en-US', { timeZone: tz }));
+  // Build UTC boundaries for the query: local midnight → local end-of-day in UTC
+  const noonUTC = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  const tzOffsetMs = noonUTC.getTime() -
+    new Date(noonUTC.toLocaleString('en-US', { timeZone: tz })).getTime();
+  const startUTC = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0) + tzOffsetMs);
+  const endUTC   = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999) + tzOffsetMs);
 
   const { data: appointments, error } = await supabase
     .from('appointments')
@@ -74,9 +78,11 @@ async function sendDailyReport({ tenantId, reportType }) {
   if (!appointments?.length) {
     const text = `${header}\n\nNo hay turnos agendados para este día. 🗓️`;
     for (const phone of adminPhones) {
-      await sendMessage(tenantId, phone, text).catch(err =>
-        logger.warn({ tenantId, phone, err: err.message }, '[DailyReport] Error al enviar reporte vacío')
-      );
+      const result = await sendMessage(tenantId, phone, text).catch(err => {
+        logger.warn({ tenantId, phone, err: err.message }, '[DailyReport] Error al enviar reporte vacío');
+        return null;
+      });
+      if (!result) logger.warn({ tenantId, phone }, '[DailyReport] Baileys no disponible — reporte vacío no enviado');
     }
     return;
   }
@@ -107,9 +113,11 @@ async function sendDailyReport({ tenantId, reportType }) {
   body += `📊 ${summaryParts}`;
 
   for (const phone of adminPhones) {
-    await sendMessage(tenantId, phone, body).catch(err =>
-      logger.warn({ tenantId, phone, err: err.message }, '[DailyReport] Error al enviar reporte')
-    );
+    const result = await sendMessage(tenantId, phone, body).catch(err => {
+      logger.warn({ tenantId, phone, err: err.message }, '[DailyReport] Error al enviar reporte');
+      return null;
+    });
+    if (!result) logger.warn({ tenantId, phone }, '[DailyReport] Baileys no disponible — reporte no enviado');
   }
 
   logger.info({ tenantId, reportType, count: appointments.length }, '[DailyReport] Reporte enviado');
