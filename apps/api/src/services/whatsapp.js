@@ -59,30 +59,63 @@ async function sendMessage(tenantId, phone, text) {
   }
 
   const jid = normalizedPhone + '@s.whatsapp.net';
-  // Reset the clock right before sending so the inactivity timer can't fire
-  // mid-send (sendMessage may take up to 20s).
-  resetInactivityTimer(tenantId);
-  logger.info({ tenantId, jid, textLength: text?.length }, '[Baileys] Enviando mensaje...');
-  let timeoutId;
-  try {
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error(`Baileys sendMessage timeout after ${BAILEYS_SEND_TIMEOUT_MS}ms`));
-      }, BAILEYS_SEND_TIMEOUT_MS);
-    });
 
-    const result = await Promise.race([
-      sock.sendMessage(jid, { text, linkPreview: null }),
-      timeoutPromise,
-    ]);
-    logger.info({ tenantId, jid, messageId: result?.key?.id }, '[Baileys] Mensaje enviado');
+  async function trySend(socket) {
     resetInactivityTimer(tenantId);
-    return result;
+    logger.info({ tenantId, jid, textLength: text?.length }, '[Baileys] Enviando mensaje...');
+    let timeoutId;
+    try {
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`Baileys sendMessage timeout after ${BAILEYS_SEND_TIMEOUT_MS}ms`));
+        }, BAILEYS_SEND_TIMEOUT_MS);
+      });
+      const result = await Promise.race([
+        socket.sendMessage(jid, { text, linkPreview: null }),
+        timeoutPromise,
+      ]);
+      logger.info({ tenantId, jid, messageId: result?.key?.id }, '[Baileys] Mensaje enviado');
+      resetInactivityTimer(tenantId);
+      return result;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+
+  try {
+    return await trySend(sock);
   } catch (err) {
-    logger.error({ tenantId, jid, err: err?.message }, '[Baileys] Error en sendMessage');
-    throw err;
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    const isConnectionClosed = err?.message?.includes('Connection Closed') ||
+      err?.output?.payload?.message?.includes('Connection Closed');
+
+    if (!isConnectionClosed) {
+      logger.error({ tenantId, jid, err: err?.message }, '[Baileys] Error en sendMessage');
+      throw err;
+    }
+
+    // Session reconnecting — wait and retry once with a fresh socket
+    logger.warn({ tenantId, jid }, '[Baileys] Connection Closed al enviar — reintentando en 4s...');
+    await new Promise(resolve => setTimeout(resolve, 4000));
+
+    let freshSock;
+    try {
+      freshSock = await getOrConnectedSocket(tenantId);
+    } catch (wakeErr) {
+      logger.error({ tenantId, jid, err: wakeErr.message }, '[Baileys] Wake timeout en reintento');
+      throw wakeErr;
+    }
+
+    if (!freshSock?.user) {
+      logger.error({ tenantId, jid }, '[Baileys] Sin sesión activa en reintento');
+      throw err;
+    }
+
+    try {
+      return await trySend(freshSock);
+    } catch (retryErr) {
+      logger.error({ tenantId, jid, err: retryErr?.message }, '[Baileys] Error en sendMessage (reintento)');
+      throw retryErr;
+    }
   }
 }
 
