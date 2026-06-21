@@ -162,6 +162,11 @@ async function runDailyReminders() {
     const reminderType = appt.tenant?.reminder_type || 'day_before';
     const reminderTime = appt.tenant?.reminder_time || '10:00';
 
+    if (now >= new Date(appt.scheduled_at)) {
+      logger.info({ appointmentId: appt.id }, 'Skipping reminder: appointment time already passed');
+      continue;
+    }
+
     const target = getReminderDateTimeUTC(appt.scheduled_at, tz, reminderType, reminderTime);
     const deltaMs = Math.abs(now.getTime() - target.getTime());
     if (deltaMs > 60 * 1000) continue;
