@@ -309,6 +309,33 @@ async function runCalendarSync(userId, tenantId) {
     }))
     .filter(e => !!e.phone && !syncedIds.has(e.id));
 
+  // Sync notes from description back to existing appointments (corre SIEMPRE,
+  // aunque no haya eventos nuevos). Si cambian las notas y el webhook está activo,
+  // re-notificar a GonzalezSoro para re-parsear la propiedad (ej: agregar
+  // "Departamento:" después de crear la cita).
+  const existingEvents = items.filter(e => syncedIds.has(e.id));
+  for (const e of existingEvents) {
+    const notes = extractNotesFromDescription(e.description || '');
+    const { data: existing } = await supabase
+      .from('appointments')
+      .select('id, notes, scheduled_at, contact:contacts(id, name, phone), service:services(id, name)')
+      .eq('google_event_id', e.id)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    if (existing && (existing.notes || null) !== (notes || null)) {
+      await supabase.from('appointments').update({ notes: notes || null }).eq('id', existing.id);
+      if (tenantSettings.gonzalez_soro_webhook_enabled && existing.contact) {
+        const { email: contactEmail } = extractDataFromDescription(e.description || '');
+        notifyAppointment({
+          appointment: { id: existing.id, scheduledAt: existing.scheduled_at, notes: notes || null },
+          contact: { id: existing.contact.id, name: existing.contact.name, phone: existing.contact.phone, email: contactEmail },
+          service: existing.service ? { id: existing.service.id, name: existing.service.name } : undefined,
+          tenant: { businessName: tenantSettings.business_name },
+        });
+      }
+    }
+  }
+
   if (!newEvents.length) return { created: 0 };
 
   const { data: existingContacts } = await supabase
@@ -385,32 +412,6 @@ async function runCalendarSync(userId, tenantId) {
         });
       }
       created++;
-    }
-  }
-
-  // Sync notes from description back to existing appointments.
-  // Si cambian las notas y el webhook está activo, re-notificar a GonzalezSoro
-  // para que re-parsee la propiedad (ej: agregar "Departamento:" después de crear).
-  const existingEvents = items.filter(e => syncedIds.has(e.id));
-  for (const e of existingEvents) {
-    const notes = extractNotesFromDescription(e.description);
-    const { data: existing } = await supabase
-      .from('appointments')
-      .select('id, notes, scheduled_at, contact:contacts(id, name, phone), service:services(id, name)')
-      .eq('google_event_id', e.id)
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
-    if (existing && (existing.notes || null) !== (notes || null)) {
-      await supabase.from('appointments').update({ notes: notes || null }).eq('id', existing.id);
-      if (tenantSettings.gonzalez_soro_webhook_enabled && existing.contact) {
-        const { email: contactEmail } = extractDataFromDescription(e.description);
-        notifyAppointment({
-          appointment: { id: existing.id, scheduledAt: existing.scheduled_at, notes: notes || null },
-          contact: { id: existing.contact.id, name: existing.contact.name, phone: existing.contact.phone, email: contactEmail },
-          service: existing.service ? { id: existing.service.id, name: existing.service.name } : undefined,
-          tenant: { businessName: tenantSettings.business_name },
-        });
-      }
     }
   }
 
