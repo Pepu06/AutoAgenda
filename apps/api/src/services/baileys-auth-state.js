@@ -83,7 +83,12 @@ async function useSupabaseAuthState(tenantId, isActive) {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'tenant_id' });
 
-    if (upsertError) throw upsertError;
+    if (upsertError) {
+      // Concurrent upserts from rapid saveCreds calls can cause serialization
+      // failures — log and swallow; next saveCreds call will persist the latest state.
+      logger.warn({ tenantId, err: upsertError.message }, '[BaileysAuth] Upsert conflict — will retry on next creds.update');
+      return;
+    }
 
     logger.debug({ tenantId }, '[BaileysAuth] Credentials persisted');
   }

@@ -85,36 +85,37 @@ async function sendMessage(tenantId, phone, text) {
   try {
     return await trySend(sock);
   } catch (err) {
-    const isConnectionClosed = err?.message?.includes('Connection Closed') ||
-      err?.output?.payload?.message?.includes('Connection Closed');
+    const isTransient = err?.message?.includes('Connection Closed') ||
+      err?.output?.payload?.message?.includes('Connection Closed') ||
+      err?.message?.includes('timed out');
 
-    if (!isConnectionClosed) {
+    if (!isTransient) {
       logger.error({ tenantId, jid, err: err?.message }, '[Baileys] Error en sendMessage');
       throw err;
     }
 
-    // Session reconnecting — wait and retry once with a fresh socket
-    logger.warn({ tenantId, jid }, '[Baileys] Connection Closed al enviar — reintentando en 4s...');
-    await new Promise(resolve => setTimeout(resolve, 4000));
+    // Session reconnecting — wait longer than the minimum reconnect delay (5s) then retry once.
+    logger.warn({ tenantId, jid }, '[Baileys] Transient send error — reintentando en 8s...');
+    await new Promise(resolve => setTimeout(resolve, 8000));
 
     let freshSock;
     try {
       freshSock = await getOrConnectedSocket(tenantId);
     } catch (wakeErr) {
-      logger.error({ tenantId, jid, err: wakeErr.message }, '[Baileys] Wake timeout en reintento');
-      throw wakeErr;
+      logger.warn({ tenantId, jid, err: wakeErr.message }, '[Baileys] Wake timeout en reintento — mensaje omitido');
+      return null;
     }
 
     if (!freshSock?.user) {
-      logger.error({ tenantId, jid }, '[Baileys] Sin sesión activa en reintento');
-      throw err;
+      logger.warn({ tenantId, jid }, '[Baileys] Sin sesión activa en reintento — mensaje omitido');
+      return null;
     }
 
     try {
       return await trySend(freshSock);
     } catch (retryErr) {
       logger.error({ tenantId, jid, err: retryErr?.message }, '[Baileys] Error en sendMessage (reintento)');
-      throw retryErr;
+      return null;
     }
   }
 }
