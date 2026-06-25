@@ -9,6 +9,7 @@ const { trackMessageSent } = require('../workers/usageTracking');
 const { checkUsageLimit } = require('../middleware/checkUsage');
 const { JobName } = require('@autoagenda/shared');
 const { notifyAppointment } = require('../services/gonzalezSoroWebhook');
+const { confirmToken } = require('../utils/confirmToken');
 const { AppError, ValidationError } = require('../errors');
 const { formatTime, formatTemplateHour } = require('../utils/datetime');
 
@@ -617,7 +618,7 @@ async function remindEvent(req, res, next) {
       negocio: encabezado,
     });
     const confirmLink = appointment?.id
-      ? `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointment.id}`
+      ? `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointment.id}?t=${confirmToken(appointment.id)}`
       : '';
     await sendMessage(req.tenantId, phone, rendered + confirmLink);
 

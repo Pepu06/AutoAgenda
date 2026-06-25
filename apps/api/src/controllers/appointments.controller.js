@@ -1,5 +1,5 @@
 const { supabase, convertKeys } = require('@autoagenda/db');
-const { AppError, NotFoundError } = require('../errors');
+const { AppError, NotFoundError, ValidationError } = require('../errors');
 const logger = require('../config/logger');
 const { appointmentsQueue } = require('../workers/queue');
 const { JobName } = require('@autoagenda/shared');
@@ -12,6 +12,21 @@ const REMINDER_CONFIG_ERROR = 'Completá el Nombre del negocio en Configuración
 
 function hasReminderConfig(tenant) {
   return Boolean(String(tenant?.business_name || '').trim());
+}
+
+// Reject contact/service ids that don't belong to the caller's tenant, so a
+// tenant can't attach another tenant's contact/service to an appointment.
+async function assertOwnedRefs(tenantId, { contactId, serviceId }) {
+  if (contactId) {
+    const { data } = await supabase
+      .from('contacts').select('id').eq('id', contactId).eq('tenant_id', tenantId).maybeSingle();
+    if (!data) throw new ValidationError('Contacto inválido');
+  }
+  if (serviceId) {
+    const { data } = await supabase
+      .from('services').select('id').eq('id', serviceId).eq('tenant_id', tenantId).maybeSingle();
+    if (!data) throw new ValidationError('Servicio inválido');
+  }
 }
 
 async function list(req, res, next) {
@@ -49,6 +64,8 @@ async function create(req, res, next) {
       .single();
     if (tenantError) throw tenantError;
     if (!hasReminderConfig(tenant)) throw new AppError(REMINDER_CONFIG_ERROR, 400);
+
+    await assertOwnedRefs(req.tenantId, { contactId, serviceId });
 
     const { data, error } = await supabase
       .from('appointments')
@@ -106,6 +123,7 @@ async function update(req, res, next) {
     if (!existing) throw new NotFoundError('Appointment not found');
 
     const { scheduledAt, status, notes, contactId, serviceId } = req.body;
+    await assertOwnedRefs(req.tenantId, { contactId, serviceId });
     const updates = {
       ...(scheduledAt  && { scheduled_at: new Date(scheduledAt).toISOString() }),
       ...(status       && { status }),

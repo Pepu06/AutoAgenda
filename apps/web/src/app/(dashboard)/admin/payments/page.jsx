@@ -20,18 +20,19 @@ export default function AdminPaymentsPage() {
     setLoading(false);
   }, []);
 
-  function handleLogin(e) {
+  async function handleLogin(e) {
     e.preventDefault();
-    
-    // Contraseña hardcodeada (después podés moverla a variable de entorno)
-    const ADMIN_PASSWORD = 'autoagenda2026';
-    
-    if (password === ADMIN_PASSWORD) {
+    // Validate against the server — no password lives in the client bundle.
+    try {
+      const res = await fetch(`${API_URL}/admin/payment-proofs`, {
+        headers: { 'x-admin-password': password },
+      });
+      if (!res.ok) throw new Error('bad password');
       sessionStorage.setItem('admin_auth', 'true');
       sessionStorage.setItem('admin_auth_password', password);
       setIsAuthenticated(true);
       setError('');
-    } else {
+    } catch {
       setError('Contraseña incorrecta');
       setPassword('');
     }
@@ -99,7 +100,7 @@ function AdminPaymentsList() {
   async function loadProofs() {
     try {
       setLoading(true);
-      const adminPassword = sessionStorage.getItem('admin_auth_password') || 'autoagenda2026';
+      const adminPassword = sessionStorage.getItem('admin_auth_password') || '';
       const res = await fetch(`${API_URL}/admin/payment-proofs`, {
         headers: {
           'x-admin-password': adminPassword,
@@ -155,7 +156,7 @@ function PaymentProofCard({ proof, onActionDone }) {
   async function handleApprove() {
     try {
       setProcessing(true);
-      const adminPassword = sessionStorage.getItem('admin_auth_password') || 'autoagenda2026';
+      const adminPassword = sessionStorage.getItem('admin_auth_password') || '';
       const res = await fetch(`${API_URL}/admin/payment-proofs/${proof.id}/approve`, {
         method: 'POST',
         headers: {
@@ -185,7 +186,7 @@ function PaymentProofCard({ proof, onActionDone }) {
 
     try {
       setProcessing(true);
-      const adminPassword = sessionStorage.getItem('admin_auth_password') || 'autoagenda2026';
+      const adminPassword = sessionStorage.getItem('admin_auth_password') || '';
       const res = await fetch(`${API_URL}/admin/payment-proofs/${proof.id}/reject`, {
         method: 'POST',
         headers: {

@@ -10,6 +10,7 @@ const { trackMessageSent } = require('./usageTracking');
 const { checkUsageLimit } = require('../middleware/checkUsage');
 const { JobName } = require('@autoagenda/shared');
 const env = require('../config/env');
+const { confirmToken } = require('../utils/confirmToken');
 
 function hasReminderConfig(tenant) {
   return Boolean(String(tenant?.business_name || '').trim());
@@ -234,7 +235,7 @@ async function runDailyReminders() {
         ubicacion,
         negocio:   encabezado,
       });
-      const confirmLink = `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appt.id}`;
+      const confirmLink = `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appt.id}?t=${confirmToken(appt.id)}`;
       const fullText = rendered + confirmLink;
 
       const whatsappResponse = await sendMessage(appt.tenant_id, appt.contact.phone, fullText);

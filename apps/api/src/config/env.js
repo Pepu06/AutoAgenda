@@ -10,12 +10,13 @@ const envSchema = z.object({
   PORT:                  z.coerce.number().default(3001),
   SUPABASE_URL:          z.string().url(),
   SUPABASE_SERVICE_KEY:  z.string().min(1),
-  JWT_SECRET:            z.string().min(8),
+  JWT_SECRET:            z.string().min(32),
   REDIS_URL:             z.string().optional().default(''),
   BAILEYS_ENABLED:       z.string().optional().default('true').transform((v) => v !== 'false'),
   SENTRY_DSN:            z.string().optional().default(''),
   WHATSAPP_TEMPLATE_LANGUAGE:  z.string().optional().default('en'),
-  WHATSAPP_VERIFY_TOKEN:       z.string().optional().default('verify'),
+  WHATSAPP_VERIFY_TOKEN:       z.string().optional().default(''),
+  META_APP_SECRET:             z.string().optional().default(''),
   WHATSAPP_PHONE_NUMBER_ID:    z.string().min(1),
   WHATSAPP_ACCESS_TOKEN:       z.string().min(1),
   WHATSAPP_TEMPLATE_REMINDER:      z.string().optional().default('confirmacion_turnos'),
@@ -30,14 +31,24 @@ const envSchema = z.object({
   MERCADOPAGO_WEBHOOK_SECRET:  z.string().optional().default(''),
   GOOGLE_DRIVE_REFRESH_TOKEN:  z.string().optional().default(''),
   GOOGLE_DRIVE_FOLDER_ID:      z.string().optional().default(''),
-  ADMIN_PANEL_PASSWORD:        z.string().optional().default('autoagenda2026'),
+  ADMIN_PANEL_PASSWORD:        z.string().optional().default(''),
+  AUTOAGENDA_WEBHOOK_SECRET:   z.string().optional().default(''),
   PAYMENT_CBU:                 z.string().optional().default(''),
   PAYMENT_ALIAS:               z.string().optional().default(''),
   GMAIL_USER:                  z.string().optional().default(''),
   GMAIL_APP_PASSWORD:          z.string().optional().default(''),
 }).superRefine((data, ctx) => {
-  if (data.NODE_ENV === 'production' && !data.REDIS_URL) {
-    ctx.addIssue({ code: 'custom', path: ['REDIS_URL'], message: 'REDIS_URL is required in production' });
+  if (data.NODE_ENV !== 'production') return;
+  // Secrets that must be set explicitly in production (no insecure defaults).
+  const required = {
+    REDIS_URL: data.REDIS_URL,
+    WHATSAPP_VERIFY_TOKEN: data.WHATSAPP_VERIFY_TOKEN,
+    ADMIN_PANEL_PASSWORD: data.ADMIN_PANEL_PASSWORD,
+    AUTOAGENDA_WEBHOOK_SECRET: data.AUTOAGENDA_WEBHOOK_SECRET,
+    META_APP_SECRET: data.META_APP_SECRET,
+  };
+  for (const [key, value] of Object.entries(required)) {
+    if (!value) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required in production` });
   }
 });
 

@@ -4,6 +4,7 @@ const env = require('../config/env');
 const logger = require('../config/logger');
 const { formatTemplateHour } = require('../utils/datetime');
 const { checkUsageLimit } = require('../middleware/checkUsage');
+const { confirmToken } = require('../utils/confirmToken');
 
 function hasReminderConfig(tenant) {
   const businessName = String(tenant?.business_name || '').trim();
@@ -59,7 +60,7 @@ async function sendFollowUp({ appointmentId }) {
   text += `Hola ${nombre}, ¿cómo estás? 👋\n\n`;
   text += `Aún no confirmaste tu cita del ${date} a las ${time}.`;
   if (ubicacion) text += `\n\n📌 Ubicación: ${ubicacion}`;
-  text += `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointmentId}`;
+  text += `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointmentId}?t=${confirmToken(appointmentId)}`;
 
   const whatsappResponse = await sendMessage(appointment.tenant_id, appointment.contact.phone, text);
 

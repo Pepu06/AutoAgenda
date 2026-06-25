@@ -41,7 +41,7 @@ app.use(cors({
 }));
 
 // Increase body size limit for payment proof uploads (images can be large)
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '10mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.get('/', (req, res) => {
@@ -65,7 +65,7 @@ app.use('/auth', authLimiter, authRoutes);
 app.use('/contacts', contactsRoutes);
 app.use('/services', servicesRoutes);
 app.use('/appointments', appointmentsRoutes);
-app.use('/webhook', webhookRoutes);
+app.use('/webhook', webhookLimiter, webhookRoutes);
 app.use('/calendar', calendarRoutes);
 app.use('/settings', settingsRoutes);
 app.use('/subscription', subscriptionRoutes);

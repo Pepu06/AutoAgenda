@@ -10,6 +10,8 @@ async function notifyAppointment({ appointment, contact, service, tenant }) {
 
   const body = JSON.stringify({ appointment, contact, service, tenant });
   console.log('[gonzalezSoroWebhook] firing → tenant:', tenant?.businessName, 'appointment:', appointment?.id);
+  // Log exact notes sent so a null propiedadId can be traced to the address text.
+  console.log('[gonzalezSoroWebhook] notes →', JSON.stringify(appointment?.notes));
 
   try {
     await new Promise((resolve, reject) => {

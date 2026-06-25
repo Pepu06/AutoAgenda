@@ -20,8 +20,25 @@ function verify(req, res) {
   return res.sendStatus(403);
 }
 
+function validSignature(req) {
+  // Verify Meta's X-Hub-Signature-256 over the raw request body.
+  if (!env.META_APP_SECRET) return false;
+  const header = req.get('x-hub-signature-256') || '';
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', env.META_APP_SECRET)
+    .update(req.rawBody || Buffer.from(''))
+    .digest('hex');
+  const a = Buffer.from(header);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 async function receive(req, res) {
   try {
+    if (!validSignature(req)) {
+      logger.warn('whatsapp_webhook_bad_signature');
+      return res.sendStatus(403);
+    }
     const body = req.body;
     logger.info({ object: body?.object }, '[Webhook] Incoming payload');
 

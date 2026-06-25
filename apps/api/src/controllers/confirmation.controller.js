@@ -1,6 +1,7 @@
 const { supabase } = require('@autoagenda/db');
 const { getCalendarEvent, updateEventTitleAndColor, refreshAccessToken } = require('../services/google');
 const { sendMessage } = require('../services/whatsapp');
+const { verifyConfirmToken } = require('../utils/confirmToken');
 const logger = require('../config/logger');
 
 async function getValidToken(userId, eventId) {
@@ -228,7 +229,11 @@ async function processAction(req, res) {
 
 async function confirmByAppointmentId(req, res) {
   const { appointmentId } = req.params;
+  const { t } = req.query;
   if (!appointmentId) return res.status(400).send(renderPage('Error', '<h1>Link inválido</h1>'));
+  if (!verifyConfirmToken(appointmentId, t)) {
+    return res.status(403).send(renderPage('Link inválido', '<h1>Link inválido o expirado</h1>'));
+  }
 
   const { data: appointment } = await supabase
     .from('appointments')
@@ -268,8 +273,8 @@ async function confirmByAppointmentId(req, res) {
     <div class="event-time">📅 ${escapeHtml(eventTime)}</div>
     <p>¿Podés confirmar tu asistencia al turno de <strong>${escapeHtml(appointment.service?.name || '')}</strong>?</p>
     <div class="actions">
-      <a href="/c/${encodeURIComponent(appointmentId)}/action?estado=confirmed" class="btn btn-confirm">✓ Confirmar asistencia</a>
-      <a href="/c/${encodeURIComponent(appointmentId)}/action?estado=cancelled" class="btn btn-cancel">✕ Cancelar turno</a>
+      <a href="/c/${encodeURIComponent(appointmentId)}/action?estado=confirmed&t=${encodeURIComponent(t)}" class="btn btn-confirm">✓ Confirmar asistencia</a>
+      <a href="/c/${encodeURIComponent(appointmentId)}/action?estado=cancelled&t=${encodeURIComponent(t)}" class="btn btn-cancel">✕ Cancelar turno</a>
     </div>
   `;
 
@@ -278,10 +283,13 @@ async function confirmByAppointmentId(req, res) {
 
 async function processAppointmentAction(req, res) {
   const { appointmentId } = req.params;
-  const { estado } = req.query;
+  const { estado, t } = req.query;
 
   if (!appointmentId || !['confirmed', 'cancelled'].includes(estado)) {
     return res.status(400).send(renderPage('Error', '<h1>Parámetros inválidos</h1>'));
+  }
+  if (!verifyConfirmToken(appointmentId, t)) {
+    return res.status(403).send(renderPage('Link inválido', '<h1>Link inválido o expirado</h1>'));
   }
 
   const { data: appointment } = await supabase

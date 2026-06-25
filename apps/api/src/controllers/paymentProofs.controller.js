@@ -1,12 +1,27 @@
+const crypto = require('crypto');
 const { supabase } = require('@autoagenda/db');
 const env = require('../config/env');
 const { ValidationError, ForbiddenError, NotFoundError } = require('../errors');
 const { uploadPaymentProof, listPaymentProofs, getPaymentProofById, downloadPaymentProof, updatePaymentProofStatus } = require('../services/googleDrive');
 const logger = require('../config/logger');
 
+function timingSafeEqual(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  // Length leak is acceptable; equal-length buffers required for timingSafeEqual.
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
 function assertAdminPassword(req) {
-  const adminPassword = req.headers['x-admin-password'];
-  if (!adminPassword || adminPassword !== env.ADMIN_PANEL_PASSWORD) {
+  const expected = env.ADMIN_PANEL_PASSWORD;
+  // Fail closed: never authorize when no admin password is configured.
+  if (!expected) {
+    logger.error('ADMIN_PANEL_PASSWORD not configured — admin endpoints disabled');
+    throw new ForbiddenError('Admin panel no configurado');
+  }
+  const provided = req.headers['x-admin-password'];
+  if (!provided || !timingSafeEqual(provided, expected)) {
+    logger.warn({ ip: req.ip }, 'admin_password_failed');
     throw new ForbiddenError('Admin password inválida');
   }
 }
