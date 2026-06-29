@@ -150,15 +150,24 @@ async function getValidToken(userId, calendarId = 'primary') {
 
   // Test with primary calendar (token validation doesn't depend on calendarId)
   const test = await getCalendarEvents(accessToken, { days: 1 });
-  if (test === null && refreshToken) {
+  if (test === null) {
+    if (!refreshToken) return null;
     try {
       accessToken = await refreshAccessToken(refreshToken);
-      await supabase.from('users').update({ google_access_token: accessToken }).eq('id', userId);
-    } catch {
       await supabase.from('users').update({
-        google_access_token: null,
-        google_reconnect_required: true,
+        google_access_token: accessToken,
+        google_reconnect_required: false,
       }).eq('id', userId);
+    } catch (err) {
+      // Only disconnect on real OAuth errors (revoked/expired refresh token).
+      // Transient network errors must not wipe the user's connection.
+      const isAuthError = /invalid_grant|invalid_client|unauthorized_client/.test(String(err.message));
+      if (isAuthError) {
+        await supabase.from('users').update({
+          google_access_token: null,
+          google_reconnect_required: true,
+        }).eq('id', userId);
+      }
       return null;
     }
   }
