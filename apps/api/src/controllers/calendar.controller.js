@@ -63,8 +63,25 @@ function normalizePhone(raw = '') {
   return last8.length === 8 ? `+54911${last8}` : null;
 }
 
+// Google Calendar converts a duplicated event's description to HTML (<br> for
+// newlines, <a href="mailto:..."> for emails). Normalize back to plain text so
+// the parsers below — which assume \n-separated plain text — keep working.
+function htmlToText(input = '') {
+  return String(input || '')
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/\s*(p|div|li)\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')           // drop remaining tags, keep inner text (e.g. <a>email</a>)
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+}
+
 function extractDataFromDescription(description = '') {
-  const desc = description || '';
+  const desc = htmlToText(description || '');
 
   const phoneMatch = desc.match(/\[\s*(\+?[\d\s\-(). ]{6,})\s*\]/);
   const phone = phoneMatch ? normalizePhone(phoneMatch[1]) : null;
@@ -120,7 +137,7 @@ function buildDescription(contact, notes) {
 }
 
 function extractNotesFromDescription(description = '') {
-  const lines = (description || '').split('\n');
+  const lines = htmlToText(description || '').split('\n');
   // Skip leading header lines and blank lines
   let i = 0;
   while (i < lines.length && (HEADER_LINE_RE.test(lines[i]) || lines[i].trim() === '')) i++;
