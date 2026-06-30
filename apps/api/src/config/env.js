@@ -45,7 +45,6 @@ const envSchema = z.object({
     WHATSAPP_VERIFY_TOKEN: data.WHATSAPP_VERIFY_TOKEN,
     ADMIN_PANEL_PASSWORD: data.ADMIN_PANEL_PASSWORD,
     AUTOAGENDA_WEBHOOK_SECRET: data.AUTOAGENDA_WEBHOOK_SECRET,
-    META_APP_SECRET: data.META_APP_SECRET,
   };
   for (const [key, value] of Object.entries(required)) {
     if (!value) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required in production` });
