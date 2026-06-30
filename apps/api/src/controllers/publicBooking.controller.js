@@ -4,13 +4,13 @@ const { computeAvailableSlots } = require('../utils/availability');
 const { appointmentsQueue } = require('../workers/queue');
 const { JobName } = require('@autoagenda/shared');
 const { createCalendarEventInCalendar, refreshAccessToken } = require('../services/google');
-const { sendMessage } = require('../services/whatsapp');
+const { dispatch } = require('../services/whatsapp');
 const { normalizePhone } = require('../utils/phone');
 
 async function _getTenantBySlug(slug) {
   const { data, error } = await supabase
     .from('tenants')
-    .select('id, name, timezone, business_name, message_template, autoagenda_title, autoagenda_description, autoagenda_profile_image, autoagenda_enabled, admin_whatsapp, admin_alerts_enabled')
+    .select('id, name, timezone, business_name, message_template, autoagenda_title, autoagenda_description, autoagenda_profile_image, autoagenda_enabled, admin_whatsapp, admin_alerts_enabled, whatsapp_provider, wasender_api_key')
     .eq('slug', slug)
     .maybeSingle();
   if (error) throw error;
@@ -332,7 +332,10 @@ async function createBooking(req, res, next) {
         const serviceName = service?.name || type.title;
 
         const alertText = `📅 *Nuevo turno agendado*\n\n👤 ${name.trim()}\n📞 ${cleanPhone}\n📅 ${dateLabel} a las ${timeLabel}\n💼 ${serviceName}`;
-        await sendMessage(tenant.id, tenant.admin_whatsapp, alertText);
+        await dispatch(tenant.id, tenant.admin_whatsapp, alertText, {
+          provider:         tenant.whatsapp_provider || 'baileys',
+          wasender_api_key: tenant.wasender_api_key,
+        });
       } catch { /* Non-fatal */ }
     }
 

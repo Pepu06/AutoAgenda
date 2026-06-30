@@ -1,5 +1,5 @@
 const { supabase } = require('@autoagenda/db');
-const { sendMessage } = require('../services/whatsapp');
+const { dispatch } = require('../services/whatsapp');
 const logger = require('../config/logger');
 
 const STATUS_EMOJI = {
@@ -21,7 +21,7 @@ const STATUS_LABEL = {
 async function sendDailyReport({ tenantId, reportType }) {
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('admin_whatsapp, business_name, timezone, time_format')
+    .select('admin_whatsapp, business_name, timezone, time_format, whatsapp_provider, wasender_api_key')
     .eq('id', tenantId)
     .maybeSingle();
 
@@ -29,6 +29,11 @@ async function sendDailyReport({ tenantId, reportType }) {
     logger.warn({ tenantId }, '[DailyReport] No admin WhatsApp configured');
     return;
   }
+
+  const tenantConfig = {
+    provider:         tenant.whatsapp_provider || 'baileys',
+    wasender_api_key: tenant.wasender_api_key,
+  };
 
   const tz = tenant.timezone || 'America/Argentina/Buenos_Aires';
   const now = new Date();
@@ -78,11 +83,11 @@ async function sendDailyReport({ tenantId, reportType }) {
   if (!appointments?.length) {
     const text = `${header}\n\nNo hay turnos agendados para este día. 🗓️`;
     for (const phone of adminPhones) {
-      const result = await sendMessage(tenantId, phone, text).catch(err => {
+      const result = await dispatch(tenantId, phone, text, tenantConfig).catch(err => {
         logger.warn({ tenantId, phone, err: err.message }, '[DailyReport] Error al enviar reporte vacío');
         return null;
       });
-      if (!result) logger.warn({ tenantId, phone }, '[DailyReport] Baileys no disponible — reporte vacío no enviado');
+      if (!result) logger.warn({ tenantId, phone }, '[DailyReport] WhatsApp no disponible — reporte vacío no enviado');
     }
     return;
   }
@@ -113,11 +118,11 @@ async function sendDailyReport({ tenantId, reportType }) {
   body += `📊 ${summaryParts}`;
 
   for (const phone of adminPhones) {
-    const result = await sendMessage(tenantId, phone, body).catch(err => {
+    const result = await dispatch(tenantId, phone, body, tenantConfig).catch(err => {
       logger.warn({ tenantId, phone, err: err.message }, '[DailyReport] Error al enviar reporte');
       return null;
     });
-    if (!result) logger.warn({ tenantId, phone }, '[DailyReport] Baileys no disponible — reporte no enviado');
+    if (!result) logger.warn({ tenantId, phone }, '[DailyReport] WhatsApp no disponible — reporte no enviado');
   }
 
   logger.info({ tenantId, reportType, count: appointments.length }, '[DailyReport] Reporte enviado');

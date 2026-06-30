@@ -1,7 +1,7 @@
 const { supabase } = require('@autoagenda/db');
 const { getCalendarEvent, updateEventTitleAndColor, refreshAccessToken } = require('../services/google');
 const { runCalendarSync } = require('./calendar.controller');
-const { sendMessage, dispatch } = require('../services/whatsapp');
+const { dispatch } = require('../services/whatsapp');
 const { getSubscriptionStatus } = require('../services/mercadopago');
 const env = require('../config/env');
 const logger = require('../config/logger');

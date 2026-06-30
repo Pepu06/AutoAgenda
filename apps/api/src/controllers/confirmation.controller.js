@@ -1,6 +1,6 @@
 const { supabase } = require('@autoagenda/db');
 const { getCalendarEvent, updateEventTitleAndColor, refreshAccessToken } = require('../services/google');
-const { sendMessage, dispatch } = require('../services/whatsapp');
+const { dispatch } = require('../services/whatsapp');
 const { verifyConfirmToken } = require('../utils/confirmToken');
 const logger = require('../config/logger');
 
@@ -36,7 +36,7 @@ async function notifyAdmin(userId, isConfirmed, clientTitle, eventDate) {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('admin_whatsapp, admin_alerts_enabled')
+      .select('admin_whatsapp, admin_alerts_enabled, whatsapp_provider, wasender_api_key')
       .eq('id', user.tenant_id)
       .single();
 
@@ -44,10 +44,14 @@ async function notifyAdmin(userId, isConfirmed, clientTitle, eventDate) {
 
     const icon = isConfirmed ? '✅' : '❌';
     const action = isConfirmed ? 'confirmó' : 'canceló';
-    await sendMessage(
+    await dispatch(
       user.tenant_id,
       tenant.admin_whatsapp,
-      `${icon} *${clientTitle}* ${action} su cita del *${eventDate}*`
+      `${icon} *${clientTitle}* ${action} su cita del *${eventDate}*`,
+      {
+        provider:         tenant.whatsapp_provider || 'baileys',
+        wasender_api_key: tenant.wasender_api_key,
+      }
     );
   } catch (err) {
     logger.warn({ err: err.message }, 'Failed to send admin notification');

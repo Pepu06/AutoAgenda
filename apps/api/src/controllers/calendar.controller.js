@@ -3,7 +3,7 @@ const logger = require('../config/logger');
 const { getCalendarEvents, getCalendarEvent, refreshAccessToken, exchangeCodeForTokens, getUserInfo, updateEventColor, updateEventTitleAndColor, createCalendarEvent, listCalendars, watchCalendar, stopCalendarWatch, updateEventDescription } = require('../services/google');
 const env = require('../config/env');
 const crypto = require('crypto');
-const { sendMessage, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
+const { dispatch, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
 const { appointmentsQueue } = require('../workers/queue');
 const { trackMessageSent } = require('../workers/usageTracking');
 const { checkUsageLimit } = require('../middleware/checkUsage');
@@ -590,7 +590,7 @@ async function remindEvent(req, res, next) {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('business_name, message_template, reminder_template, timezone, time_format, location, location_mode')
+      .select('business_name, message_template, reminder_template, timezone, time_format, location, location_mode, whatsapp_provider, wasender_api_key')
       .eq('id', req.tenantId)
       .single();
 
@@ -629,7 +629,10 @@ async function remindEvent(req, res, next) {
     const confirmLink = appointment?.id
       ? `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointment.id}?t=${confirmToken(appointment.id)}`
       : '';
-    await sendMessage(req.tenantId, phone, rendered + confirmLink);
+    await dispatch(req.tenantId, phone, rendered + confirmLink, {
+      provider:         tenant?.whatsapp_provider || 'baileys',
+      wasender_api_key: tenant?.wasender_api_key,
+    });
 
     await trackMessageSent(req.tenantId, 'reminder');
 

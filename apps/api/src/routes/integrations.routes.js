@@ -1,7 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { supabase } = require('@autoagenda/db');
-const { sendMessage } = require('../services/whatsapp');
+const { dispatch } = require('../services/whatsapp');
 
 const router = express.Router();
 
@@ -29,7 +29,7 @@ router.post('/send-whatsapp', async (req, res) => {
   // Find the tenant that has gonzalez_soro_whatsapp_enabled
   const { data: tenant, error } = await supabase
     .from('tenants')
-    .select('id')
+    .select('id, whatsapp_provider, wasender_api_key')
     .eq('gonzalez_soro_whatsapp_enabled', true)
     .limit(1)
     .single();
@@ -39,7 +39,10 @@ router.post('/send-whatsapp', async (req, res) => {
   }
 
   try {
-    await sendMessage(tenant.id, phone, message);
+    await dispatch(tenant.id, phone, message, {
+      provider:         tenant.whatsapp_provider || 'baileys',
+      wasender_api_key: tenant.wasender_api_key,
+    });
     return res.json({ ok: true });
   } catch (err) {
     console.error('[integrations/send-whatsapp]', err.message);
