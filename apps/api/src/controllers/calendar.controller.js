@@ -332,7 +332,7 @@ async function runCalendarSync(userId, tenantId) {
       phone: extractDataFromDescription(e.description || '').phone,
       start: e.start?.dateTime || `${e.start.date}T12:00:00`,
       end: e.end?.dateTime || e.end?.date,
-      description: e.description || '',
+      description: htmlToText(e.description || ''),
     }))
     .filter(e => !!e.phone && !syncedIds.has(e.id));
 
@@ -496,7 +496,7 @@ async function events(req, res, next) {
           attendees: (e.attendees || []).filter(a => !a.self).map(a => ({ name: a.displayName || a.email, email: a.email })),
           colorId,
           status,
-          description: e.description || '',
+          description: htmlToText(e.description || ''),
           appointmentId: dbAppointmentId[e.id] || null,
           transferConfirmed: dbTransferConfirmed[e.id] ?? false,
           requiresTransfer: dbRequiresTransfer[e.id] ?? false,
