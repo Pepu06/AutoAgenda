@@ -11,6 +11,7 @@ const ALLOWED_FIELDS = [
   'confirm_reply_message', 'cancel_reply_message',
   'gonzalez_soro_webhook_enabled',
   'gonzalez_soro_whatsapp_enabled',
+  'whatsapp_provider', 'wasender_api_key',
 ];
 
 // Read-only flag — not in ALLOWED_FIELDS so tenants can't modify it themselves

@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { supabase } = require('@autoagenda/db');
-const { sendMessage, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
+const { dispatch, renderTemplate, DEFAULT_REMINDER_TEMPLATE } = require('../services/whatsapp');
 const { getCalendarEvent } = require('../services/google');
 const { getValidToken } = require('../controllers/calendar.controller');
 const logger = require('../config/logger');
@@ -135,7 +135,7 @@ async function runDailyReminders() {
       google_event_id,
       contact:contacts(name, phone),
       service:services(name),
-      tenant:tenants(business_name, message_template, reminder_template, messaging_enabled, timezone, time_format, reminder_type, reminder_time, location, location_mode)
+      tenant:tenants(business_name, message_template, reminder_template, messaging_enabled, timezone, time_format, reminder_type, reminder_time, location, location_mode, whatsapp_provider, wasender_api_key)
     `)
     .in('status', ['pending', 'notified', 'sin_enviar'])
     .is('reminder_sent_at', null)
@@ -238,9 +238,14 @@ async function runDailyReminders() {
       const confirmLink = `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appt.id}?t=${confirmToken(appt.id)}`;
       const fullText = rendered + confirmLink;
 
-      const whatsappResponse = await sendMessage(appt.tenant_id, appt.contact.phone, fullText);
+      const tenantConfig = {
+        provider:         appt.tenant?.whatsapp_provider || 'baileys',
+        wasender_api_key: appt.tenant?.wasender_api_key,
+      };
 
-      if (!whatsappResponse) {
+      const whatsappResponse = await dispatch(appt.tenant_id, appt.contact.phone, fullText, tenantConfig);
+
+      if (!whatsappResponse && tenantConfig.provider === 'baileys') {
         throw new Error('Baileys/WhatsApp no disponible para enviar el recordatorio');
       }
 

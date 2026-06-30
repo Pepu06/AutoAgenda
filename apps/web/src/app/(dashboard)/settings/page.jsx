@@ -519,8 +519,46 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* WHATSAPP */}
-      <section className={styles.section} data-tour="settings-whatsapp">
+      {/* PROVEEDOR WHATSAPP */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Proveedor de WhatsApp</h2>
+          <p className={styles.sectionDesc}>Elegí qué servicio usar para enviar mensajes</p>
+        </div>
+        <div className={styles.fields}>
+          <Field label="Proveedor">
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {[
+                { value: 'baileys', label: 'WhatsApp (QR)' },
+                { value: 'wasender', label: 'WasenderAPI' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`${styles.toggleBtn} ${settings.whatsappProvider === opt.value ? styles.toggleActive : ''}`}
+                  onClick={() => set('whatsappProvider', opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+          {settings.whatsappProvider === 'wasender' && (
+            <Field label="Wasender Token" hint="Token de API de WasenderAPI">
+              <input
+                className={styles.input}
+                type="password"
+                value={settings.wasenderApiKey}
+                onChange={e => set('wasenderApiKey', e.target.value)}
+                placeholder="tu_token_wasender"
+              />
+            </Field>
+          )}
+        </div>
+      </section>
+
+      {/* WHATSAPP (Baileys QR) */}
+      <section className={styles.section} data-tour="settings-whatsapp" style={settings.whatsappProvider !== 'baileys' ? { display: 'none' } : undefined}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>WhatsApp</h2>
           <p className={styles.sectionDesc}>Conectá tu WhatsApp para enviar mensajes automáticos a tus clientes</p>

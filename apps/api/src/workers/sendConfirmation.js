@@ -1,5 +1,5 @@
 const { supabase } = require('@autoagenda/db');
-const { sendMessage, renderTemplate, DEFAULT_CONFIRMATION_TEMPLATE } = require('../services/whatsapp');
+const { dispatch, renderTemplate, DEFAULT_CONFIRMATION_TEMPLATE } = require('../services/whatsapp');
 const { getCalendarEvent, refreshAccessToken } = require('../services/google');
 const logger = require('../config/logger');
 const { formatTime } = require('../utils/datetime');
@@ -9,7 +9,7 @@ async function sendConfirmation({ appointmentId }) {
   logger.info({ appointmentId }, '[Confirmation] Job started');
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('*, contact:contacts(name, phone), service:services(name), tenant:tenants(timezone, time_format, business_name, reminder_type, messaging_enabled, location, location_mode, confirmation_template)')
+    .select('*, contact:contacts(name, phone), service:services(name), tenant:tenants(timezone, time_format, business_name, reminder_type, messaging_enabled, location, location_mode, confirmation_template, whatsapp_provider, wasender_api_key)')
     .eq('id', appointmentId)
     .maybeSingle();
 
@@ -83,14 +83,19 @@ async function sendConfirmation({ appointmentId }) {
   });
   const fullText = rendered;
 
-  const whatsappResponse = await sendMessage(appointment.tenant_id, appointment.contact.phone, fullText);
+  const tenantConfig = {
+    provider:         appointment.tenant?.whatsapp_provider || 'baileys',
+    wasender_api_key: appointment.tenant?.wasender_api_key,
+  };
 
-  if (!whatsappResponse) {
+  const whatsappResponse = await dispatch(appointment.tenant_id, appointment.contact.phone, fullText, tenantConfig);
+
+  if (!whatsappResponse && tenantConfig.provider === 'baileys') {
     logger.warn({ appointmentId, tenantId: appointment.tenant_id }, '[Confirmation] No WhatsApp response — message not delivered, will retry');
     throw new Error('No WhatsApp response — session may not be ready');
   }
 
-  const waMessageId = whatsappResponse?.key?.id || null;
+  const waMessageId = whatsappResponse?.key?.id || whatsappResponse?.messages?.[0]?.id || null;
 
   const { error: updateError } = await supabase
     .from('appointments')

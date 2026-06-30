@@ -1,7 +1,7 @@
 const { supabase } = require('@autoagenda/db');
 const { getCalendarEvent, updateEventTitleAndColor, refreshAccessToken } = require('../services/google');
 const { runCalendarSync } = require('./calendar.controller');
-const { sendMessage } = require('../services/whatsapp');
+const { sendMessage, dispatch } = require('../services/whatsapp');
 const { getSubscriptionStatus } = require('../services/mercadopago');
 const env = require('../config/env');
 const logger = require('../config/logger');
@@ -147,7 +147,7 @@ async function processMessage(message, _metadata) {
   try {
     const { data: replyTenant } = await supabase
       .from('tenants')
-      .select('confirm_reply_message, cancel_reply_message')
+      .select('confirm_reply_message, cancel_reply_message, whatsapp_provider, wasender_api_key')
       .eq('id', appointment.tenant_id)
       .single();
 
@@ -159,7 +159,11 @@ async function processMessage(message, _metadata) {
       : (replyTenant?.cancel_reply_message  || DEFAULT_CANCEL);
 
     const clientPhone = from.startsWith('+') ? from : `+${from}`;
-    await sendMessage(appointment.tenant_id, clientPhone, replyText);
+    const replyTenantConfig = {
+      provider:         replyTenant?.whatsapp_provider || 'baileys',
+      wasender_api_key: replyTenant?.wasender_api_key,
+    };
+    await dispatch(appointment.tenant_id, clientPhone, replyText, replyTenantConfig);
     logger.info({ appointmentId: appointment.id, newStatus }, 'Reply message sent to client');
   } catch (err) {
     logger.warn({ err }, 'Failed to send reply message to client');
@@ -170,7 +174,7 @@ async function processMessage(message, _metadata) {
     try {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('admin_whatsapp, admin_alerts_enabled, timezone, time_format')
+        .select('admin_whatsapp, admin_alerts_enabled, timezone, time_format, whatsapp_provider, wasender_api_key')
         .eq('id', appointment.tenant_id)
         .single();
 
@@ -188,9 +192,13 @@ async function processMessage(message, _metadata) {
 
         const cancelText = `❌ *Cancelación de turno*\n\n👤 ${fullAppt.contact.name}\n📞 ${fullAppt.contact.phone}\n📅 ${dateStr} a las ${timeStr}\n💼 ${fullAppt.service.name}`;
 
+        const adminTenantConfig = {
+          provider:         tenant.whatsapp_provider || 'baileys',
+          wasender_api_key: tenant.wasender_api_key,
+        };
         const adminNumbers = tenant.admin_whatsapp.split(',').map(n => n.trim()).filter(Boolean);
         for (const adminPhone of adminNumbers) {
-          await sendMessage(appointment.tenant_id, adminPhone, cancelText).catch(() => {});
+          await dispatch(appointment.tenant_id, adminPhone, cancelText, adminTenantConfig).catch(() => {});
         }
 
         logger.info({ appointmentId: appointment.id, adminNumbers }, 'Admin cancellation alert sent');

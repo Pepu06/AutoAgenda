@@ -1,5 +1,5 @@
 const { supabase } = require('@autoagenda/db');
-const { sendMessage } = require('../services/whatsapp');
+const { dispatch } = require('../services/whatsapp');
 const env = require('../config/env');
 const logger = require('../config/logger');
 const { formatTemplateHour } = require('../utils/datetime');
@@ -15,7 +15,7 @@ function hasReminderConfig(tenant) {
 async function sendFollowUp({ appointmentId }) {
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('*, contact:contacts(*), service:services(*), tenant:tenants(timezone, time_format, business_name, message_template, messaging_enabled, location)')
+    .select('*, contact:contacts(*), service:services(*), tenant:tenants(timezone, time_format, business_name, message_template, messaging_enabled, location, whatsapp_provider, wasender_api_key)')
     .eq('id', appointmentId)
     .maybeSingle();
 
@@ -62,9 +62,14 @@ async function sendFollowUp({ appointmentId }) {
   if (ubicacion) text += `\n\n📌 Ubicación: ${ubicacion}`;
   text += `\n\n👉 Confirmá o cancelá tu turno aquí:\n${env.BASE_URL}/c/${appointmentId}?t=${confirmToken(appointmentId)}`;
 
-  const whatsappResponse = await sendMessage(appointment.tenant_id, appointment.contact.phone, text);
+  const tenantConfig = {
+    provider:         appointment.tenant?.whatsapp_provider || 'baileys',
+    wasender_api_key: appointment.tenant?.wasender_api_key,
+  };
 
-  const waMessageId = whatsappResponse?.key?.id || null;
+  const whatsappResponse = await dispatch(appointment.tenant_id, appointment.contact.phone, text, tenantConfig);
+
+  const waMessageId = whatsappResponse?.key?.id || whatsappResponse?.messages?.[0]?.id || null;
 
   const { error: updateError } = await supabase
     .from('appointments')

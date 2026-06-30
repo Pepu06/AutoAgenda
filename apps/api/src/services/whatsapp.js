@@ -1,6 +1,9 @@
+const axios = require('axios');
 const logger = require('../config/logger');
 const env = require('../config/env');
 const { getOrConnectedSocket, resetInactivityTimer } = require('./baileys-session');
+
+const WASENDER_API_URL = 'https://wasenderapi.com/api/send-message';
 
 const BAILEYS_SEND_TIMEOUT_MS = 20_000;
 
@@ -120,4 +123,43 @@ async function sendMessage(tenantId, phone, text) {
   }
 }
 
-module.exports = { sendMessage, renderTemplate, DEFAULT_REMINDER_TEMPLATE, DEFAULT_CONFIRMATION_TEMPLATE };
+async function sendWasenderMessage(phone, text, apiKey) {
+  // Wasender rate limit: 1 message per 5 seconds
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
+  try {
+    const response = await axios.post(WASENDER_API_URL, {
+      to: phone,
+      text,
+    }, {
+      headers: {
+        'Authorization': `Bearer ${apiKey || env.WASENDER_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    logger.info({ phone }, '[WasenderAPI] Mensaje enviado');
+    return response.data;
+  } catch (error) {
+    logger.error({ phone, error: error.response?.data || error.message }, '[WasenderAPI] Error enviando mensaje');
+    throw error;
+  }
+}
+
+/**
+ * Route a message by provider. Workers use this so they don't need to branch themselves.
+ * - 'wasender'  → sendWasenderMessage
+ * - 'baileys'   → sendMessage(tenantId, phone, text)  [default]
+ */
+async function dispatch(tenantId, phone, text, tenantConfig = {}) {
+  const provider = tenantConfig.provider || 'baileys';
+  if (provider === 'wasender') return sendWasenderMessage(phone, text, tenantConfig.wasender_api_key);
+  return sendMessage(tenantId, phone, text);
+}
+
+module.exports = {
+  sendMessage,
+  dispatch,
+  renderTemplate,
+  DEFAULT_REMINDER_TEMPLATE,
+  DEFAULT_CONFIRMATION_TEMPLATE,
+};

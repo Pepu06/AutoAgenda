@@ -1,6 +1,6 @@
 const { supabase } = require('@autoagenda/db');
 const { getCalendarEvent, updateEventTitleAndColor, refreshAccessToken } = require('../services/google');
-const { sendMessage } = require('../services/whatsapp');
+const { sendMessage, dispatch } = require('../services/whatsapp');
 const { verifyConfirmToken } = require('../utils/confirmToken');
 const logger = require('../config/logger');
 
@@ -294,7 +294,7 @@ async function processAppointmentAction(req, res) {
 
   const { data: appointment } = await supabase
     .from('appointments')
-    .select('id, scheduled_at, status, tenant_id, user_id, contact:contacts(name), service:services(name), tenant:tenants(timezone, admin_whatsapp, admin_alerts_enabled)')
+    .select('id, scheduled_at, status, tenant_id, user_id, contact:contacts(name), service:services(name), tenant:tenants(timezone, admin_whatsapp, admin_alerts_enabled, whatsapp_provider, wasender_api_key)')
     .eq('id', appointmentId)
     .maybeSingle();
 
@@ -320,10 +320,15 @@ async function processAppointmentAction(req, res) {
       const eventDate = dateObj.toLocaleString('es-AR', { timeZone: tz, dateStyle: 'medium', timeStyle: 'short' });
       const icon = estado === 'confirmed' ? '✅' : '❌';
       const action = estado === 'confirmed' ? 'confirmó' : 'canceló';
-      sendMessage(
+      const tenantConfig = {
+        provider:         tenant.whatsapp_provider || 'baileys',
+        wasender_api_key: tenant.wasender_api_key,
+      };
+      dispatch(
         appointment.tenant_id,
         tenant.admin_whatsapp,
-        `${icon} *${appointment.contact?.name || 'Cliente'}* ${action} su cita del *${eventDate}*`
+        `${icon} *${appointment.contact?.name || 'Cliente'}* ${action} su cita del *${eventDate}*`,
+        tenantConfig
       ).catch(() => {});
     }
   } catch { /* silent */ }
