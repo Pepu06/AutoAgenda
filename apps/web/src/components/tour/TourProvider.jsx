@@ -25,31 +25,46 @@ function computePopoverStyle(rect, position, popoverWidth = 320, popoverHeight =
   const winW = window.innerWidth;
   const winH = window.innerHeight;
 
-  let top, left, placement = position;
+  // Free space between the target and each viewport edge.
+  const space = {
+    top:    rect.top,
+    bottom: winH - rect.bottom,
+    left:   rect.left,
+    right:  winW - rect.right,
+  };
+  const needs = (side) =>
+    side === 'top' || side === 'bottom' ? popoverHeight + GAP * 2 : popoverWidth + GAP * 2;
+  const fits = (side) => space[side] >= needs(side);
+  const bySpace = (a, b) => space[b] - space[a];
 
-  if (position === 'bottom') {
-    top  = rect.bottom + GAP;
-    left = rect.left;
-    if (top + popoverHeight > winH - GAP) { top = rect.top - popoverHeight - GAP; placement = 'top'; }
-  } else if (position === 'top') {
-    top  = rect.top - popoverHeight - GAP;
-    left = rect.left;
-    if (top < GAP) { top = rect.bottom + GAP; placement = 'bottom'; }
-  } else if (position === 'right') {
-    left = rect.right + GAP;
-    top  = rect.top;
-    if (left + popoverWidth > winW - GAP) { left = rect.left - popoverWidth - GAP; placement = 'left'; }
-  } else if (position === 'left') {
-    left = rect.left - popoverWidth - GAP;
-    top  = rect.top;
-    if (left < GAP) { left = rect.right + GAP; placement = 'right'; }
+  const opposite = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+
+  // Choose the side that actually has room: requested → opposite → emptiest side.
+  // ponytail: if the target is taller/wider than the viewport no side fits; we edge-pin
+  // below and accept minor overlap of the off-screen part. Shrink the highlight target
+  // (anchor to a child, not the whole section) if that ever becomes a real problem.
+  const ordered = [position, opposite[position], ...['top', 'bottom', 'left', 'right'].sort(bySpace)];
+  const placement = ordered.find(fits) || ['top', 'bottom', 'left', 'right'].sort(bySpace)[0];
+
+  const clampX = (x) => Math.max(GAP, Math.min(x, winW - popoverWidth - GAP));
+  const clampY = (y) => Math.max(GAP, Math.min(y, winH - popoverHeight - GAP));
+
+  let top, left;
+  if (placement === 'bottom') {
+    top  = fits('bottom') ? rect.bottom + GAP : winH - popoverHeight - GAP;
+    left = clampX(rect.left);
+  } else if (placement === 'top') {
+    top  = fits('top') ? rect.top - popoverHeight - GAP : GAP;
+    left = clampX(rect.left);
+  } else if (placement === 'right') {
+    left = fits('right') ? rect.right + GAP : winW - popoverWidth - GAP;
+    top  = clampY(rect.top);
+  } else {
+    left = fits('left') ? rect.left - popoverWidth - GAP : GAP;
+    top  = clampY(rect.top);
   }
 
-  // Hard clamp — always keep popover fully on screen
-  top  = Math.max(GAP, Math.min(top,  winH - popoverHeight - GAP));
-  left = Math.max(GAP, Math.min(left, winW - popoverWidth  - GAP));
-
-  return { style: { top, left }, placement };
+  return { style: { top: clampY(top), left: clampX(left) }, placement, anchored: fits(placement) };
 }
 
 // ────────────────────────────────────────────────────────
@@ -123,7 +138,12 @@ export function TourProvider({ children }) {
     const tick = () => {
       const el = document.querySelector(s.selector);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Scroll so the popover's side has room: bottom-anchored steps push the
+        // target up, top-anchored steps pull it down, otherwise center it.
+        const block = s.position === 'bottom' ? 'start'
+                    : s.position === 'top'    ? 'end'
+                    :                           'center';
+        el.scrollIntoView({ behavior: 'smooth', block });
         setTimeout(() => {
           const r = el.getBoundingClientRect();
           el.classList.add('tour-highlight');
@@ -297,8 +317,8 @@ export function TourProvider({ children }) {
                 : undefined
             }
           >
-            {/* Arrow — only when anchored and positioned */}
-            {isAnchored && popoverPos && (
+            {/* Arrow — only when the popover sits beside the target (not edge-pinned) */}
+            {isAnchored && popoverPos && popoverPos.anchored && (
               <div className={`${styles.arrow} ${
                 popoverPos.placement === 'bottom' ? styles.arrowBottom :
                 popoverPos.placement === 'top'    ? styles.arrowTop    :

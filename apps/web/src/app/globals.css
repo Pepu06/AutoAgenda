@@ -179,4 +179,6 @@ a { color: inherit; text-decoration: none; }
   box-shadow: 0 0 0 4px #6366f1, 0 0 0 9999px rgba(0, 0, 0, 0.55) !important;
   border-radius: 8px !important;
   transition: box-shadow 0.2s ease !important;
+  /* Clearance so block:start/end scrolling never tucks the target under a fixed header */
+  scroll-margin: 96px !important;
 }
