@@ -24,7 +24,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          for i in 1 2 3; do npm ci && exit 0; echo "npm ci failed (attempt $i), retrying..."; sleep 10; done
+          exit 1
 
       - name: Lint API
         run: npm run lint --workspace=apps/api
