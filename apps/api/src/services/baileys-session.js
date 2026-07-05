@@ -204,7 +204,7 @@ function sleepSession(tenantId) {
 
   if (entry.socket) {
     sleepingTenants.add(tenantId);
-    try { entry.socket.end(undefined); } catch (_) {}
+    try { entry.socket.end(undefined); } catch (_) { /* already closing */ }
   } else {
     // No live socket (e.g., mid-reconnect): invalidate and drop directly.
     entry.epoch++;

@@ -122,7 +122,7 @@ export default function CalendarPage() {
       const res = await api.get('/calendar/events');
       setEvents(res.data || []);
       if (res.connected === false) setConnected(false);
-    } catch { }
+    } catch { /* keep last known events on fetch failure */ }
     finally { setSyncing(false); }
   }, []);
 

@@ -23,5 +23,11 @@ module.exports = {
         browser: true,
       },
     },
+    {
+      files: ['**/__tests__/**/*.js', '**/*.test.js'],
+      env: {
+        jest: true,
+      },
+    },
   ],
 };

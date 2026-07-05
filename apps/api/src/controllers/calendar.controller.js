@@ -91,8 +91,8 @@ function extractDataFromDescription(description = '') {
   const rawDni = dniLabelMatch ? dniLabelMatch[1] : (dniBarMatch ? dniBarMatch[1] : null);
   const dni = rawDni ? rawDni.replace(/\./g, '') : null;
 
-  const dobMatch = desc.match(/(?:nacimiento|nac|fecha)[^:]*[:\s]\s*(\d{2}[\/.]?\d{2}[\/.]?\d{4})/i)
-    || desc.match(/\b(\d{2})[\/.](\d{2})[\/.](\d{4})\b/);
+  const dobMatch = desc.match(/(?:nacimiento|nac|fecha)[^:]*[:\s]\s*(\d{2}[/.]?\d{2}[/.]?\d{4})/i)
+    || desc.match(/\b(\d{2})[/.](\d{2})[/.](\d{4})\b/);
   let birthDate = null;
   if (dobMatch) {
     birthDate = dobMatch[3]
@@ -100,7 +100,7 @@ function extractDataFromDescription(description = '') {
       : dobMatch[1].replace(/\./g, '/');
   }
 
-  const emailMatch = desc.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+  const emailMatch = desc.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   const email = emailMatch ? emailMatch[0] : null;
 
   return { phone, dni, birthDate, email };
