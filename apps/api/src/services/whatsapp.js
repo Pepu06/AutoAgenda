@@ -1,7 +1,7 @@
 const axios = require('axios');
 const logger = require('../config/logger');
 const env = require('../config/env');
-const { getOrConnectedSocket, resetInactivityTimer } = require('./baileys-session');
+const { getOrConnectedSocket, resetInactivityTimer, invalidateSocket } = require('./baileys-session');
 
 const WASENDER_API_URL = 'https://wasenderapi.com/api/send-message';
 
@@ -90,12 +90,17 @@ async function sendMessage(tenantId, phone, text) {
   } catch (err) {
     const isTransient = err?.message?.includes('Connection Closed') ||
       err?.output?.payload?.message?.includes('Connection Closed') ||
-      err?.message?.includes('timed out');
+      err?.message?.includes('timed out') ||
+      err?.message?.includes('sendMessage timeout');
 
     if (!isTransient) {
       logger.error({ tenantId, jid, err: err?.message }, '[Baileys] Error en sendMessage');
       throw err;
     }
+
+    // Socket looked connected but stopped responding — kill it so the retry below
+    // actually reconnects instead of getting handed the same stale socket back.
+    invalidateSocket(tenantId);
 
     // Session reconnecting — wait longer than the minimum reconnect delay (5s) then retry once.
     logger.warn({ tenantId, jid }, '[Baileys] Transient send error — reintentando en 8s...');

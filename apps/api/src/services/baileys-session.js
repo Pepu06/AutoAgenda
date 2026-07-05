@@ -297,6 +297,15 @@ function getSocket(tenantId) {
   return sessions.get(tenantId)?.socket ?? null;
 }
 
+// Force-closes a socket that looked connected (has .user) but stopped responding
+// (e.g. sendMessage timeout). Without this the zombie socket stays cached and
+// getOrConnectedSocket keeps handing it back, repeating the same timeout forever.
+function invalidateSocket(tenantId) {
+  const entry = sessions.get(tenantId);
+  if (!entry?.socket) return;
+  try { entry.socket.end(new Error('Stale socket invalidated after send timeout')); } catch (_) { /* already closing */ }
+}
+
 function isConnected(tenantId) {
   const entry = sessions.get(tenantId);
   return Boolean(entry?.socket?.user);
@@ -339,6 +348,7 @@ module.exports = {
   getSocket,
   getOrConnectedSocket,
   resetInactivityTimer,
+  invalidateSocket,
   isConnected,
   onQR,
   onStatus,
