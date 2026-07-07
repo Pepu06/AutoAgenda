@@ -1,17 +1,18 @@
 const https = require('https');
 const http = require('http');
+const logger = require('../config/logger');
 
 async function notifyAppointment({ appointment, contact, service, tenant }) {
   const url = process.env.GONZALEZ_SORO_WEBHOOK_URL;
   const secret = process.env.AUTOAGENDA_WEBHOOK_SECRET;
 
-  console.log('[gonzalezSoroWebhook] url:', url ? 'set' : 'NOT SET');
-  if (!url) return;
+  if (!url) {
+    logger.warn({ appointmentId: appointment?.id }, '[GonzalezSoro] GONZALEZ_SORO_WEBHOOK_URL not configured');
+    return;
+  }
 
   const body = JSON.stringify({ appointment, contact, service, tenant });
-  console.log('[gonzalezSoroWebhook] firing → tenant:', tenant?.businessName, 'appointment:', appointment?.id);
-  // Log exact notes sent so a null propiedadId can be traced to the address text.
-  console.log('[gonzalezSoroWebhook] notes →', JSON.stringify(appointment?.notes));
+  logger.info({ appointmentId: appointment?.id, tenant: tenant?.businessName }, '[GonzalezSoro] Sending webhook notification');
 
   try {
     await new Promise((resolve, reject) => {
@@ -33,18 +34,23 @@ async function notifyAppointment({ appointment, contact, service, tenant }) {
           let data = '';
           res.on('data', (chunk) => { data += chunk; });
           res.on('end', () => {
-            console.log('[gonzalezSoroWebhook] response status:', res.statusCode, 'body:', data.slice(0, 200));
-            resolve();
+            if (res.statusCode >= 400) {
+              reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
+            } else {
+              logger.info({ appointmentId: appointment?.id, statusCode: res.statusCode }, '[GonzalezSoro] Webhook sent successfully');
+              resolve();
+            }
           });
         }
       );
       req.on('error', reject);
-      req.setTimeout(8000, () => { req.destroy(); reject(new Error('timeout')); });
+      req.setTimeout(8000, () => { req.destroy(); reject(new Error('webhook timeout after 8s')); });
       req.write(body);
       req.end();
     });
   } catch (err) {
-    console.warn('[gonzalezSoroWebhook] failed:', err.message);
+    logger.error({ appointmentId: appointment?.id, err: err.message }, '[GonzalezSoro] Webhook failed');
+    throw err;
   }
 }
 

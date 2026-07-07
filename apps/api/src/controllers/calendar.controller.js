@@ -358,7 +358,7 @@ async function runCalendarSync(userId, tenantId) {
           contact: { id: existing.contact.id, name: existing.contact.name, phone: existing.contact.phone, email: contactEmail },
           service: existing.service ? { id: existing.service.id, name: existing.service.name } : undefined,
           tenant: { businessName: tenantSettings.business_name },
-        });
+        }).catch(err => logger.error({ appointmentId: existing.id, err: err.message }, '[GonzalezSoro] Webhook notify failed'));
       }
     }
   }
@@ -436,7 +436,7 @@ async function runCalendarSync(userId, tenantId) {
           contact: { id: contact.id, name: contact.name, phone: contact.phone, email: contactEmail },
           service: { id: service.id, name: service.name },
           tenant: { businessName: tenantSettings.business_name },
-        });
+        }).catch(err => logger.error({ appointmentId: appointment.id, err: err.message }, '[GonzalezSoro] Webhook notify failed'));
       }
       created++;
     }
@@ -732,14 +732,13 @@ async function createEvent(req, res, next) {
 
     queueJob(JobName.SEND_CONFIRMATION, { attempts: 5, backoff: { type: 'exponential', delay: 8000 } });
 
-    console.log('[calendar/createEvent] gonzalez_soro_webhook_enabled:', tenantSettings.gonzalez_soro_webhook_enabled);
     if (tenantSettings.gonzalez_soro_webhook_enabled) {
       notifyAppointment({
         appointment: { id: appointment.id, scheduledAt: appointment.scheduled_at, notes: appointment.notes },
         contact: { id: contact.id, name: contact.name, phone: contact.phone, email: contact.email },
         service: { id: service.id, name: service.name },
         tenant: { businessName: tenantSettings.business_name },
-      });
+      }).catch(err => logger.error({ appointmentId: appointment.id, err: err.message }, '[GonzalezSoro] Webhook notify failed'));
     }
 
     return res.status(201).json({ success: true, data: convertKeys(appointment) });
@@ -817,7 +816,7 @@ async function updateCalendarEvent(req, res, next) {
           contact: { id: appt.contact.id, name: appt.contact.name, phone: appt.contact.phone, email: appt.contact.email },
           service: appt.service ? { id: appt.service.id, name: appt.service.name } : undefined,
           tenant: { businessName: tenantSettings.business_name },
-        });
+        }).catch(err => logger.error({ appointmentId: appt.id, err: err.message }, '[GonzalezSoro] Webhook notify failed'));
       }
     }
 
