@@ -88,25 +88,50 @@ async function sendConfirmation({ appointmentId }) {
     wasender_api_key: appointment.tenant?.wasender_api_key,
   };
 
-  const whatsappResponse = await dispatch(appointment.tenant_id, appointment.contact.phone, fullText, tenantConfig);
+  // Atomic claim BEFORE sending: flip sin_enviar -> notified so no concurrent run
+  // (BullMQ retry or a stalled-job reprocess) can send the same confirmation twice.
+  // Provider-agnostic — protects both baileys and wasender.
+  const { data: claimed, error: claimError } = await supabase
+    .from('appointments')
+    .update({ confirmation_sent_at: new Date().toISOString(), status: 'notified' })
+    .eq('id', appointmentId)
+    .eq('tenant_id', appointment.tenant_id)
+    .eq('status', 'sin_enviar')
+    .select('id');
+
+  if (claimError) {
+    logger.error({ appointmentId, claimError }, 'Failed to claim appointment for confirmation');
+    throw claimError;
+  }
+  if (!claimed || claimed.length === 0) {
+    logger.info({ appointmentId }, '[Confirmation] Already claimed by another run — skipping to avoid duplicate');
+    return;
+  }
+
+  // Release the claim (only if still 'notified') so a genuine send failure can be retried.
+  const releaseClaim = () => supabase
+    .from('appointments')
+    .update({ confirmation_sent_at: null, status: 'sin_enviar' })
+    .eq('id', appointmentId)
+    .eq('tenant_id', appointment.tenant_id)
+    .eq('status', 'notified');
+
+  let whatsappResponse;
+  try {
+    whatsappResponse = await dispatch(appointment.tenant_id, appointment.contact.phone, fullText, tenantConfig);
+  } catch (err) {
+    await releaseClaim();
+    logger.warn({ appointmentId, err: err?.message }, '[Confirmation] Send failed — claim released, will retry');
+    throw err;
+  }
 
   if (!whatsappResponse && tenantConfig.provider === 'baileys') {
-    logger.warn({ appointmentId, tenantId: appointment.tenant_id }, '[Confirmation] No WhatsApp response — message not delivered, will retry');
+    await releaseClaim();
+    logger.warn({ appointmentId, tenantId: appointment.tenant_id }, '[Confirmation] No WhatsApp response — claim released, will retry');
     throw new Error('No WhatsApp response — session may not be ready');
   }
 
   const waMessageId = whatsappResponse?.key?.id || whatsappResponse?.messages?.[0]?.id || null;
-
-  const { error: updateError } = await supabase
-    .from('appointments')
-    .update({ confirmation_sent_at: new Date().toISOString(), status: 'notified' })
-    .eq('id', appointmentId)
-    .eq('tenant_id', appointment.tenant_id);
-
-  if (updateError) {
-    logger.error({ appointmentId, updateError }, 'Failed to mark appointment as notified after confirmation');
-    throw updateError;
-  }
 
   const { error: logError } = await supabase.from('message_logs').insert({
     tenant_id:      appointment.tenant_id,
@@ -117,9 +142,10 @@ async function sendConfirmation({ appointmentId }) {
     wa_message_id:  waMessageId,
   });
 
+  // Non-fatal: the message was already sent. Don't throw (a retry would skip on the
+  // claim and never re-log anyway) — just record the failure.
   if (logError) {
     logger.error({ appointmentId, logError }, 'Failed to insert confirmation message log');
-    throw logError;
   }
 
   logger.info({ appointmentId }, '[Confirmation] Mensaje enviado, status -> notified');

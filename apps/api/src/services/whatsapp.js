@@ -137,6 +137,9 @@ async function sendWasenderMessage(phone, text, apiKey) {
       to: phone,
       text,
     }, {
+      // Cap the request so a hung wasender call can't outlast the BullMQ lock (30s)
+      // and get the job reprocessed in parallel — the classic duplicate-send trigger.
+      timeout: 15_000,
       headers: {
         'Authorization': `Bearer ${apiKey || env.WASENDER_API_KEY}`,
         'Content-Type': 'application/json',
