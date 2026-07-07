@@ -629,3 +629,53 @@
   from { opacity: 0; transform: scale(0.94); }
   to { opacity: 1; transform: scale(1); }
 }
+
+/* ── Tablet: stack the grid and the day panel ── */
+@media (max-width: 900px) {
+  .calendarLayout {
+    grid-template-columns: 1fr;
+  }
+  .sidebarPanel {
+    position: static;
+  }
+}
+
+/* ── Phone: tighten everything so the month fits and stays tappable ── */
+@media (max-width: 560px) {
+  .title { font-size: 22px; }
+
+  .headerActions { width: 100%; }
+  .btnConnect, .btnSync, .btnDisconnect { flex: 1; justify-content: center; }
+
+  .connectCard { padding: 56px 20px; }
+
+  .monthNav { padding: 12px 12px; }
+  .monthSelect, .yearSelect { font-size: 15px; }
+
+  .weekDay { padding: 8px 2px; font-size: 9px; letter-spacing: 0.5px; }
+
+  /* Shorter cells + smaller gutters so 6 rows don't dominate the screen */
+  .dayCell, .dayEmpty { min-height: 60px; }
+  .dayCell { padding: 6px 4px 4px; }
+  .dayNumber { width: 20px; height: 20px; font-size: 11px; }
+  .pillText { font-size: 9px; }
+  .eventPill { padding: 1px 4px; gap: 4px; }
+
+  /* Popup takes the full width and sits near the top for thumb reach */
+  .popupBackdrop { align-items: flex-start; padding: 16px 0; }
+  .popup { width: calc(100vw - 24px); max-width: calc(100vw - 24px); }
+  .popupHeader { padding: 16px; }
+  .popupBody { padding: 14px 16px; }
+
+  /* Stack label over value so long notes/phones read left-to-right, not squeezed */
+  .popupField {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+  }
+  .popupValue { text-align: left; }
+  /* Badge hugs its content instead of stretching full-width when stacked */
+  .popupStatusBadge { align-self: flex-start; }
+
+  .popupRemindBtn { margin: 0 16px 16px; width: calc(100% - 32px); }
+}
