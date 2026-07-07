@@ -806,17 +806,24 @@ async function updateCalendarEvent(req, res, next) {
     if (tenantSettings?.gonzalez_soro_webhook_enabled) {
       const { data: appt } = await supabase
         .from('appointments')
-        .select('id, scheduled_at, notes, contact:contacts(id, name, phone, email), service:services(id, name)')
+        .select('id, scheduled_at, notes, contact_id, service:services(id, name)')
         .eq('google_event_id', eventId)
         .eq('tenant_id', req.tenantId)
         .maybeSingle();
-      if (appt?.contact) {
-        notifyAppointment({
-          appointment: { id: appt.id, scheduledAt: appt.scheduled_at, notes: appt.notes || null },
-          contact: { id: appt.contact.id, name: appt.contact.name, phone: appt.contact.phone, email: appt.contact.email },
-          service: appt.service ? { id: appt.service.id, name: appt.service.name } : undefined,
-          tenant: { businessName: tenantSettings.business_name },
-        }).catch(err => logger.error({ appointmentId: appt.id, err: err.message }, '[GonzalezSoro] Webhook notify failed'));
+      if (appt?.contact_id) {
+        const { data: contact } = await supabase
+          .from('contacts')
+          .select('id, name, phone, email')
+          .eq('id', appt.contact_id)
+          .single();
+        if (contact) {
+          notifyAppointment({
+            appointment: { id: appt.id, scheduledAt: appt.scheduled_at, notes: appt.notes || null },
+            contact: { id: contact.id, name: contact.name, phone: contact.phone, email: contact.email },
+            service: appt.service ? { id: appt.service.id, name: appt.service.name } : undefined,
+            tenant: { businessName: tenantSettings.business_name },
+          }).catch(err => logger.error({ appointmentId: appt.id, err: err.message }, '[GonzalezSoro] Webhook notify failed'));
+        }
       }
     }
 
