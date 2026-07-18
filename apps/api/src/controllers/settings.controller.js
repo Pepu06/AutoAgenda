@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { supabase, convertKeys } = require('@autoagenda/db');
 const { AppError } = require('../errors');
 
@@ -17,7 +18,17 @@ const ALLOWED_FIELDS = [
 // Read-only flag — not in ALLOWED_FIELDS so tenants can't modify it themselves
 const READONLY_FIELDS = ['has_inmobiliaria_integration'];
 
-const SELECT_COLS = ['id', 'name', ...ALLOWED_FIELDS, ...READONLY_FIELDS].join(', ');
+// Fetched internally but never returned raw — see stripSecretFields below.
+// Not settable via updateSettings; only rotateGonzalezSoroSecret can write it.
+const SECRET_FIELDS = ['gonzalez_soro_webhook_secret'];
+
+const SELECT_COLS = ['id', 'name', ...ALLOWED_FIELDS, ...READONLY_FIELDS, ...SECRET_FIELDS].join(', ');
+
+function stripSecretFields(data) {
+  data.gonzalezSoroWebhookSecretSet = Boolean(data.gonzalezSoroWebhookSecret);
+  delete data.gonzalezSoroWebhookSecret;
+  return data;
+}
 
 async function getSettings(req, res, next) {
   try {
@@ -28,7 +39,7 @@ async function getSettings(req, res, next) {
 
     if (settingsResult.error) throw settingsResult.error;
 
-    const data = convertKeys(settingsResult.data);
+    const data = stripSecretFields(convertKeys(settingsResult.data));
     data.baileysConnected = baileysResult.data?.connected ?? false;
 
     return res.json({ success: true, data });
@@ -66,7 +77,20 @@ async function updateSettings(req, res, next) {
       .single();
 
     if (error) throw error;
-    return res.json({ success: true, data: convertKeys(data) });
+    return res.json({ success: true, data: stripSecretFields(convertKeys(data)) });
+  } catch (err) { return next(err); }
+}
+
+async function rotateGonzalezSoroSecret(req, res, next) {
+  try {
+    const secret = crypto.randomBytes(24).toString('hex');
+    const { error } = await supabase
+      .from('tenants')
+      .update({ gonzalez_soro_webhook_secret: secret })
+      .eq('id', req.tenantId);
+
+    if (error) throw error;
+    return res.json({ success: true, data: { secret } });
   } catch (err) { return next(err); }
 }
 
@@ -168,4 +192,4 @@ async function triggerDailyReport(req, res, next) {
   } catch (err) { return next(err); }
 }
 
-module.exports = { getSettings, updateSettings, deleteAccount, getOnboarding, updateOnboarding, triggerDailyReport };
+module.exports = { getSettings, updateSettings, deleteAccount, getOnboarding, updateOnboarding, triggerDailyReport, rotateGonzalezSoroSecret };

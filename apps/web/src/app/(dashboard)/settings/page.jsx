@@ -42,6 +42,7 @@ const DEFAULTS = {
   confirmationTemplate: '',
   gonzalezSoroWebhookEnabled: false,
   gonzalezSoroWhatsappEnabled: false,
+  gonzalezSoroWebhookSecretSet: false,
   hasInmobiliariaIntegration: false,
 };
 
@@ -77,6 +78,9 @@ export default function SettingsPage() {
   const [qrImage, setQrImage] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState('');
+  const [gsSecret, setGsSecret] = useState('');
+  const [gsSecretLoading, setGsSecretLoading] = useState(false);
+  const [gsSecretError, setGsSecretError] = useState('');
   const eventSourceRef = useRef(null);
   const isLoadedRef = useRef(false);
   const autoSaveTimerRef = useRef(null);
@@ -114,6 +118,7 @@ export default function SettingsPage() {
       if (d.confirmationTemplate != null) mapped.confirmationTemplate = d.confirmationTemplate;
       if (d.gonzalezSoroWebhookEnabled != null) mapped.gonzalezSoroWebhookEnabled = d.gonzalezSoroWebhookEnabled;
       if (d.gonzalezSoroWhatsappEnabled != null) mapped.gonzalezSoroWhatsappEnabled = d.gonzalezSoroWhatsappEnabled;
+      if (d.gonzalezSoroWebhookSecretSet != null) mapped.gonzalezSoroWebhookSecretSet = d.gonzalezSoroWebhookSecretSet;
       if (d.hasInmobiliariaIntegration != null) mapped.hasInmobiliariaIntegration = d.hasInmobiliariaIntegration;
       setSettings(s => ({ ...s, ...mapped }));
       isLoadedRef.current = true;
@@ -180,6 +185,20 @@ export default function SettingsPage() {
     } catch (err) {
       setError(err.message || 'Error al eliminar la cuenta');
       setDeleting(false);
+    }
+  }
+
+  async function rotateGonzalezSoroSecret() {
+    setGsSecretLoading(true);
+    setGsSecretError('');
+    try {
+      const res = await api.post('/settings/gonzalez-soro-secret/rotate');
+      setGsSecret(res.data.secret);
+      setSettings(s => ({ ...s, gonzalezSoroWebhookSecretSet: true }));
+    } catch (err) {
+      setGsSecretError(err.message || 'Error al generar el secreto');
+    } finally {
+      setGsSecretLoading(false);
     }
   }
 
@@ -625,6 +644,48 @@ export default function SettingsPage() {
               </span>
             </div>
           </Field>
+          {settings.gonzalezSoroWhatsappEnabled && (
+            <Field label="Secreto de autenticación" hint="El sistema inmobiliario usa este secreto para identificar a qué cuenta enrutar los mensajes.">
+              {gsSecret ? (
+                <div>
+                  <p style={{ color: '#f59e0b', fontSize: '13px', marginBottom: '8px' }}>
+                    Guardá este secreto ahora — no se vuelve a mostrar.
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <code style={{ padding: '8px 12px', background: 'var(--bg-subtle, #f3f4f6)', borderRadius: 6, fontSize: '13px', wordBreak: 'break-all' }}>
+                      {gsSecret}
+                    </code>
+                    <button
+                      type="button"
+                      className={styles.btnSave}
+                      onClick={() => navigator.clipboard.writeText(gsSecret)}
+                    >
+                      Copiar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {gsSecretError && (
+                    <p style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px' }}>{gsSecretError}</p>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span className={styles.switchLabel}>
+                      {settings.gonzalezSoroWebhookSecretSet ? 'Secreto configurado' : 'Sin secreto configurado'}
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.btnSave}
+                      onClick={rotateGonzalezSoroSecret}
+                      disabled={gsSecretLoading}
+                    >
+                      {gsSecretLoading ? 'Generando...' : (settings.gonzalezSoroWebhookSecretSet ? 'Rotar secreto' : 'Generar secreto')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Field>
+          )}
         </div>
       </section>}
 
