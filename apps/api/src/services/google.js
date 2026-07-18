@@ -1,4 +1,5 @@
 const env = require('../config/env');
+const logger = require('../config/logger');
 
 const TOKEN_URL    = 'https://oauth2.googleapis.com/token';
 const USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
@@ -111,7 +112,10 @@ async function getCalendarEvent(accessToken, eventId, calendarId = 'primary') {
   const res = await fetch(`${CAL_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    logger.warn({ status: res.status, eventId, calendarId }, 'getCalendarEvent: Google API returned non-ok status');
+    return null;
+  }
   return res.json();
 }
 
