@@ -202,13 +202,22 @@ export default function SettingsPage() {
     }
   }
 
-  function startQRScan() {
+  async function startQRScan() {
     if (eventSourceRef.current) eventSourceRef.current.close();
     setQrLoading(true);
     setQrImage(null);
     setQrError('');
 
-    api.post('/baileys/connect').catch(() => {});
+    try {
+      await api.post('/baileys/connect');
+    } catch (err) {
+      if (err.status === 401) {
+        clearAuth();
+        router.push('/login');
+        return;
+      }
+      // Non-auth failure — let the SSE stream below report its own error.
+    }
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';

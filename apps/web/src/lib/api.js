@@ -21,7 +21,9 @@ async function apiFetch(path, options = {}) {
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error(data.error || 'Request failed');
+    const err = new Error(data.error || 'Request failed');
+    err.status = res.status;
+    throw err;
   }
 
   return data;
