@@ -243,28 +243,39 @@ async function runDailyReminders() {
         wasender_api_key: appt.tenant?.wasender_api_key,
       };
 
-      const whatsappResponse = await dispatch(appt.tenant_id, appt.contact.phone, fullText, tenantConfig);
-
-      if (!whatsappResponse && tenantConfig.provider === 'baileys') {
-        throw new Error('Baileys/WhatsApp no disponible para enviar el recordatorio');
-      }
-
-      const waMessageId = whatsappResponse?.messages?.[0]?.id || whatsappResponse?.key?.id || null;
-
-      // Claim after a successful send so we do not lose reminders when Baileys is temporarily down.
-      // In this single-process cron, the in-memory run lock below prevents duplicate sends.
-      const reminderTime = new Date().toISOString();
+      // Claim BEFORE sending: the atomic conditional update is the lock. Whichever
+      // executor flips reminder_sent_at first is the only one that sends, so a second
+      // replica or an overlapping cron tick can never double-send. Released below if
+      // the send fails, so a temporary provider outage still retries.
+      const claimTime = new Date().toISOString();
       const { data: claimed } = await supabase
         .from('appointments')
-        .update({ reminder_sent_at: reminderTime, status: 'pending' })
+        .update({ reminder_sent_at: claimTime, status: 'pending' })
         .eq('id', appt.id)
         .is('reminder_sent_at', null)
         .select('id');
 
       if (!claimed || claimed.length === 0) {
-        logger.info({ appointmentId: appt.id }, 'Reminder was sent but not claimed, skipping log write');
+        logger.info({ appointmentId: appt.id }, 'Reminder already claimed by another run, skipping');
         continue;
       }
+
+      let whatsappResponse;
+      try {
+        whatsappResponse = await dispatch(appt.tenant_id, appt.contact.phone, fullText, tenantConfig);
+        if (!whatsappResponse && tenantConfig.provider === 'baileys') {
+          throw new Error('Baileys/WhatsApp no disponible para enviar el recordatorio');
+        }
+      } catch (sendErr) {
+        // Release only our own claim so a later run can retry instead of dropping it.
+        await supabase.from('appointments')
+          .update({ reminder_sent_at: null })
+          .eq('id', appt.id)
+          .eq('reminder_sent_at', claimTime);
+        throw sendErr;
+      }
+
+      const waMessageId = whatsappResponse?.messages?.[0]?.id || whatsappResponse?.key?.id || null;
 
       await trackMessageSent(appt.tenant_id, 'reminder');
 

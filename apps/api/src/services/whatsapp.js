@@ -88,13 +88,14 @@ async function sendMessage(tenantId, phone, text) {
   try {
     return await trySend(sock);
   } catch (err) {
-    const isTransient = err?.message?.includes('Connection Closed') ||
-      err?.output?.payload?.message?.includes('Connection Closed') ||
-      err?.message?.includes('timed out') ||
-      err?.message?.includes('sendMessage timeout');
+    // Only "Connection Closed" is safe to resend: it means the message never left
+    // the socket. A send timeout is NOT retried — the message may already have been
+    // delivered, and resending it is the classic Baileys duplicate.
+    const isConnectionClosed = err?.message?.includes('Connection Closed') ||
+      err?.output?.payload?.message?.includes('Connection Closed');
 
-    if (!isTransient) {
-      logger.error({ tenantId, jid, err: err?.message }, '[Baileys] Error en sendMessage');
+    if (!isConnectionClosed) {
+      logger.error({ tenantId, jid, err: err?.message }, '[Baileys] Error en sendMessage (no reintentable)');
       throw err;
     }
 
