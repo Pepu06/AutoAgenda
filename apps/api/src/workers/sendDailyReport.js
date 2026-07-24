@@ -18,12 +18,28 @@ const STATUS_LABEL = {
   cancelled:  'Cancelado',
 };
 
+async function fetchTenantForReport(tenantId) {
+  const cols = 'admin_whatsapp, business_name, timezone, time_format, whatsapp_provider, wasender_api_key';
+  // The cron only fires at the exact configured hour, so a failed attempt has no
+  // later retry that hour — one inline retry absorbs a transient DB/network blip
+  // instead of silently dropping that day's report.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const { data, error } = await supabase.from('tenants').select(cols).eq('id', tenantId).maybeSingle();
+    if (!error) return { data, error: null };
+    if (attempt === 2) return { data: null, error };
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+}
+
 async function sendDailyReport({ tenantId, reportType }) {
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('admin_whatsapp, business_name, timezone, time_format, whatsapp_provider, wasender_api_key')
-    .eq('id', tenantId)
-    .maybeSingle();
+  const { data: tenant, error: tenantError } = await fetchTenantForReport(tenantId);
+
+  if (tenantError) {
+    // Distinct from "not configured": a transient query failure must not be
+    // mislabeled as missing config, or the real cause never surfaces in logs.
+    logger.error({ tenantId, err: tenantError.message }, '[DailyReport] Error al traer tenant tras reintento');
+    return;
+  }
 
   if (!tenant?.admin_whatsapp) {
     logger.warn({ tenantId }, '[DailyReport] No admin WhatsApp configured');

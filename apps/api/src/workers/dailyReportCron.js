@@ -24,19 +24,21 @@ function isTodayInReportDays(reportDaysStr) {
  */
 function isTimeMatch(reportTime, timezone) {
   if (!reportTime) return false;
-  
+
   // Time must end in :00
   if (!reportTime.endsWith(':00')) return false;
-  
+
   const now = new Date();
-  const localTime = now.toLocaleTimeString('en-US', { 
-    timeZone: timezone, 
+  const localHour = now.toLocaleTimeString('en-US', {
+    timeZone: timezone,
     hour12: false,
     hour: '2-digit',
-    minute: '2-digit'
   });
-  
-  return localTime === reportTime;
+
+  // Compare hour only: the cron fires a few minutes past the hour (see
+  // startDailyReportCron), and reportTime's minute is always ':00' by
+  // isValidReportTime, so matching the minute exactly would never fire.
+  return localHour.split(':')[0] === reportTime.split(':')[0];
 }
 
 /**
@@ -67,10 +69,14 @@ function isValidReportTime(time, type) {
 async function checkDailyReports() {
   logger.info('Checking for daily reports to send...');
 
+  // admin_whatsapp can be stored as '' (cleared in settings) as well as null —
+  // sendDailyReport treats both as "not configured", so this filter must match
+  // or tenants with '' pass here and get silently dropped one level down.
   const { data: tenants, error } = await supabase
     .from('tenants')
     .select('id, timezone, report_days, report_type, admin_daily_report_time, admin_whatsapp')
-    .not('admin_whatsapp', 'is', null);
+    .not('admin_whatsapp', 'is', null)
+    .neq('admin_whatsapp', '');
 
   if (error) {
     logger.error({ err: error.message }, 'Failed to fetch tenants for daily reports');
@@ -114,9 +120,11 @@ async function checkDailyReports() {
  * Starts the cron job to check for daily reports every hour at minute 0
  */
 function startDailyReportCron() {
-  // Run at minute 0 of every hour
-  cron.schedule('0 * * * *', checkDailyReports, { timezone: 'UTC' });
-  logger.info('Daily report cron scheduled (hourly at :00)');
+  // Offset 5 min from dailyCalendarReminder's '0 * * * *' so the two hourly
+  // crons don't burst Supabase queries in the same instant (root cause of a
+  // transient tenant-fetch failure that got mislabeled as "not configured").
+  cron.schedule('5 * * * *', checkDailyReports, { timezone: 'UTC' });
+  logger.info('Daily report cron scheduled (hourly at :05)');
 }
 
 module.exports = { startDailyReportCron, checkDailyReports };
