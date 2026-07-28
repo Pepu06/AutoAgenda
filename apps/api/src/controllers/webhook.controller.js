@@ -232,8 +232,22 @@ async function processMessage(message, _metadata) {
     if (userData.google_refresh_token) {
       try {
         accessToken = await refreshAccessToken(userData.google_refresh_token);
-        await supabase.from('users').update({ google_access_token: accessToken }).eq('id', apptData.user_id);
+        await supabase.from('users').update({
+          google_access_token: accessToken,
+          google_reconnect_required: false,
+        }).eq('id', apptData.user_id);
       } catch (refreshErr) {
+        // Only disconnect on real OAuth errors (revoked/expired refresh token).
+        // Transient network errors must not wipe the user's connection.
+        const isAuthError = /invalid_grant|invalid_client|unauthorized_client/.test(String(refreshErr.message));
+        if (isAuthError) {
+          await supabase.from('users').update({
+            google_access_token: null,
+            google_reconnect_required: true,
+          }).eq('id', apptData.user_id);
+          logger.warn({ refreshErr, userId: apptData.user_id }, 'Google refresh token invalid, flagged for reconnect');
+          return;
+        }
         logger.warn({ refreshErr }, 'Failed to refresh Google token, using stored access token');
       }
     }

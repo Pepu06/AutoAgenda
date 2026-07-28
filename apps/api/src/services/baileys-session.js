@@ -124,6 +124,7 @@ async function _spawnSocket(tenantId, entry) {
     if (connection === 'close') {
       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const loggedOut = reason === DisconnectReason.loggedOut;
+      const badSession = reason === DisconnectReason.badSession; // corrupted auth state — reconnecting alone can't fix it
       const wasConnected = Boolean(sock.user);
       logger.warn({ tenantId, reason, wasConnected }, '[Baileys] Disconnected');
 
@@ -144,13 +145,13 @@ async function _spawnSocket(tenantId, entry) {
 
       const intentional = stoppedIntentionally.delete(tenantId);
 
-      if (intentional || loggedOut) {
+      if (intentional || loggedOut || badSession) {
         // Truly done — notify frontend and clean up.
         entry.epoch++; // invalidate this generation
         if (entry.reconnectTimer) { clearTimeout(entry.reconnectTimer); entry.reconnectTimer = null; }
         for (const cb of entry.statusCallbacks) cb('disconnected');
         sessions.delete(tenantId);
-        if (loggedOut) {
+        if (loggedOut || badSession) {
           await supabase.from('baileys_sessions').delete().eq('tenant_id', tenantId);
         }
         return;
