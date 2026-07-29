@@ -47,9 +47,11 @@ function getEntry(tenantId) {
 async function startSession(tenantId) {
   const entry = getEntry(tenantId);
 
-  if (entry.socket?.user) return entry.socket; // already connected
+  // Liveness, not just identity: a socket whose WebSocket already died must fall
+  // through to _spawnSocket instead of being handed back as usable.
+  if (entry.socket?.user && isSocketOpen(entry.socket)) return entry.socket; // already connected
   if (entry.starting) return entry.starting;   // a start is already running — await it
-  if (entry.socket) return entry.socket;        // connecting (awaiting QR scan) — reuse, don't churn
+  if (entry.socket && isSocketUsable(entry.socket)) return entry.socket; // connecting (awaiting QR scan) — reuse, don't churn
 
   entry.starting = _spawnSocket(tenantId, entry).finally(() => {
     entry.starting = null;
@@ -321,9 +323,30 @@ function invalidateSocket(tenantId) {
   }
 }
 
+// A socket keeps `.user` set after its WebSocket dies, so `.user` alone reports a
+// zombie as connected. Baileys only notices a silently dropped connection on its
+// next keep-alive sweep (30s interval, >35s of silence before it gives up), and
+// until then we would hand the dead socket to sendMessage, which fails instantly
+// with 428 Connection Closed. Check the transport, not just the identity.
+// ponytail: `ws.isOpen` is internal to Baileys (7.0.0-rc13, an RC — expect churn)
+// and isn't reachable from its public exports, so an upgrade could rename it. When
+// the getter is missing we fall back to the old identity-only answer rather than
+// reporting every live socket as dead, which would respawn sockets on every send.
+function isSocketOpen(socket) {
+  if (!socket) return false;
+  return typeof socket.ws?.isOpen === 'boolean' ? socket.ws.isOpen : true;
+}
+
+// Reusable but not yet authenticated: OPEN, or CONNECTING while awaiting a QR scan.
+function isSocketUsable(socket) {
+  if (!socket) return false;
+  if (typeof socket.ws?.isClosed !== 'boolean') return true;
+  return !socket.ws.isClosed && !socket.ws.isClosing;
+}
+
 function isConnected(tenantId) {
   const entry = sessions.get(tenantId);
-  return Boolean(entry?.socket?.user);
+  return Boolean(entry?.socket?.user) && isSocketOpen(entry.socket);
 }
 
 function onQR(tenantId, callback) {
@@ -365,6 +388,8 @@ module.exports = {
   resetInactivityTimer,
   invalidateSocket,
   isConnected,
+  isSocketOpen,
+  isSocketUsable,
   onQR,
   onStatus,
   restoreAllSessions,
