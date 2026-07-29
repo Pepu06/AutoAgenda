@@ -17,6 +17,8 @@ const sessions = new Map();
 const stoppedIntentionally = new Set();
 // Tenants being put to sleep: close without reconnect and without clearing DB creds.
 const sleepingTenants = new Set();
+// Sockets we killed ourselves (invalidateSocket): reconnect immediately, no backoff.
+const forcedInvalidations = new Set();
 
 // After this many ms of no inbound/outbound activity the session is slept to free RAM.
 const INACTIVITY_MS = 15 * 60 * 1000; // 15 minutes
@@ -124,8 +126,9 @@ async function _spawnSocket(tenantId, entry) {
     if (connection === 'close') {
       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const loggedOut = reason === DisconnectReason.loggedOut;
-      const badSession = reason === DisconnectReason.badSession; // corrupted auth state — reconnecting alone can't fix it
       const wasConnected = Boolean(sock.user);
+      // Consume unconditionally so the flag can't leak into a later, unrelated drop.
+      const forced = forcedInvalidations.delete(tenantId);
       logger.warn({ tenantId, reason, wasConnected }, '[Baileys] Disconnected');
 
       const { error: updateErr } = await supabase
@@ -145,13 +148,13 @@ async function _spawnSocket(tenantId, entry) {
 
       const intentional = stoppedIntentionally.delete(tenantId);
 
-      if (intentional || loggedOut || badSession) {
+      if (intentional || loggedOut) {
         // Truly done — notify frontend and clean up.
         entry.epoch++; // invalidate this generation
         if (entry.reconnectTimer) { clearTimeout(entry.reconnectTimer); entry.reconnectTimer = null; }
         for (const cb of entry.statusCallbacks) cb('disconnected');
         sessions.delete(tenantId);
-        if (loggedOut || badSession) {
+        if (loggedOut) {
           await supabase.from('baileys_sessions').delete().eq('tenant_id', tenantId);
         }
         return;
@@ -165,10 +168,13 @@ async function _spawnSocket(tenantId, entry) {
       }
 
       // 515 = restartRequired (normal after pairing) — reconnect immediately so WA doesn't timeout.
-      const delay = reason === DisconnectReason.restartRequired
+      // A forced invalidation is our own doing on a healthy socket, not a failing
+      // connection: reconnect at once and don't escalate the backoff, or the caller's
+      // retry window expires before the socket is back.
+      const delay = forced || reason === DisconnectReason.restartRequired
         ? 0
         : Math.min(5000 * 2 ** entry.retries, MAX_RECONNECT_DELAY);
-      entry.retries += 1;
+      if (!forced) entry.retries += 1;
       entry.reconnectTimer = setTimeout(() => {
         entry.reconnectTimer = null;
         startSession(tenantId).catch((err) =>
@@ -257,10 +263,13 @@ async function getOrConnectedSocket(tenantId, timeoutMs = 30_000) {
         removeStatus();
         resetInactivityTimer(tenantId);
         resolve(getSocket(tenantId));
-      } else if (status === 'disconnected') {
+      } else if (status === 'disconnected' && !sessions.has(tenantId)) {
+        // Terminal only (logged out / stopped): those paths delete the entry.
+        // A transient drop keeps the entry alive with a reconnect scheduled, so
+        // keep waiting for 'connected' — the timer above bounds the wait.
         clearTimeout(timer);
         removeStatus();
-        resolve(null); // Creds invalid / logged out — caller will skip send.
+        resolve(null);
       }
     });
 
@@ -304,7 +313,12 @@ function getSocket(tenantId) {
 function invalidateSocket(tenantId) {
   const entry = sessions.get(tenantId);
   if (!entry?.socket) return;
-  try { entry.socket.end(new Error('Stale socket invalidated after send timeout')); } catch (_) { /* already closing */ }
+  forcedInvalidations.add(tenantId);
+  try {
+    entry.socket.end(new Error('Stale socket invalidated after send timeout'));
+  } catch (_) {
+    forcedInvalidations.delete(tenantId); // never closed, so no 'close' event will clear it
+  }
 }
 
 function isConnected(tenantId) {

@@ -98,12 +98,17 @@ async function sendDailyReport({ tenantId, reportType }) {
 
   if (!appointments?.length) {
     const text = `${header}\n\nNo hay turnos agendados para este día. 🗓️`;
+    let deliveredEmpty = 0;
     for (const phone of adminPhones) {
       const result = await dispatch(tenantId, phone, text, tenantConfig).catch(err => {
         logger.warn({ tenantId, phone, err: err.message }, '[DailyReport] Error al enviar reporte vacío');
         return null;
       });
-      if (!result) logger.warn({ tenantId, phone }, '[DailyReport] WhatsApp no disponible — reporte vacío no enviado');
+      if (result) deliveredEmpty += 1;
+      else logger.warn({ tenantId, phone }, '[DailyReport] WhatsApp no disponible — reporte vacío no enviado');
+    }
+    if (!deliveredEmpty) {
+      throw new Error(`Reporte diario vacío no entregado a ningún admin (${adminPhones.length} intento/s)`);
     }
     return;
   }
@@ -133,15 +138,23 @@ async function sendDailyReport({ tenantId, reportType }) {
     .join('  ·  ');
   body += `📊 ${summaryParts}`;
 
+  let delivered = 0;
   for (const phone of adminPhones) {
     const result = await dispatch(tenantId, phone, body, tenantConfig).catch(err => {
       logger.warn({ tenantId, phone, err: err.message }, '[DailyReport] Error al enviar reporte');
       return null;
     });
-    if (!result) logger.warn({ tenantId, phone }, '[DailyReport] WhatsApp no disponible — reporte no enviado');
+    if (result) delivered += 1;
+    else logger.warn({ tenantId, phone }, '[DailyReport] WhatsApp no disponible — reporte no enviado');
   }
 
-  logger.info({ tenantId, reportType, count: appointments.length }, '[DailyReport] Reporte enviado');
+  // dispatch() returns null instead of throwing when the send is dropped, so an
+  // unconditional success log here reported delivery that never happened.
+  if (!delivered) {
+    throw new Error(`Reporte diario no entregado a ningún admin (${adminPhones.length} intento/s)`);
+  }
+
+  logger.info({ tenantId, reportType, count: appointments.length, delivered, admins: adminPhones.length }, '[DailyReport] Reporte enviado');
 }
 
 module.exports = { sendDailyReport };
