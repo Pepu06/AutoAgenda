@@ -420,12 +420,17 @@ async function runCalendarSync(userId, tenantId) {
     const { service: titleService } = extractFromTitle(event.title);
     const service = await matchService(titleService, duration);
     const eventNotes = extractNotesFromDescription(event.description);
-    const { data: appointment } = await supabase.from('appointments').insert({
+    // Insert-if-absent: two syncs can run at once (Google push webhook + the
+    // background sync fired by every GET /calendar/events). Both see the event as
+    // unsynced and both insert — two appointments for one turno, two confirmations.
+    // The unique (tenant_id, google_event_id) constraint is the only real serializer;
+    // whoever loses the race gets no row back and enqueues nothing.
+    const { data: appointment } = await supabase.from('appointments').upsert({
       tenant_id: tenantId, contact_id: contact.id, service_id: service.id,
       user_id: userId, scheduled_at: new Date(event.start).toISOString(),
       status: 'sin_enviar', google_event_id: event.id,
       ...(eventNotes ? { notes: eventNotes } : {}),
-    }).select('id').single();
+    }, { onConflict: 'tenant_id,google_event_id', ignoreDuplicates: true }).select('id').maybeSingle();
     if (appointment) {
       syncedIds.add(event.id);
       appointmentsQueue.add(JobName.SEND_CONFIRMATION, { appointmentId: appointment.id }, { attempts: 5, backoff: { type: 'exponential', delay: 8000 } }).catch(() => {});
@@ -691,21 +696,11 @@ async function createEvent(req, res, next) {
     ]);
     if (!contact || !service) throw new AppError('Contacto o servicio no encontrado', 404);
 
-    const { data: appointment, error } = await supabase
-      .from('appointments')
-      .insert({
-        tenant_id: req.tenantId,
-        contact_id: contactId,
-        service_id: serviceId,
-        user_id: req.userId,
-        scheduled_at: new Date(scheduledAt).toISOString(),
-        status: 'sin_enviar',
-        notes,
-      })
-      .select('*')
-      .single();
-    if (error) throw error;
-
+    // Create the Google event BEFORE inserting the appointment: a row inserted
+    // without google_event_id is invisible to runCalendarSync's dedupe, so a sync
+    // running in that gap creates a second appointment for the same event and sends
+    // a second confirmation. Inserting the id in one shot closes the gap.
+    let googleEventId = null;
     const accessToken = await getValidToken(req.userId);
     if (accessToken) {
       const defaultCalendarId = await getOwnerCalendarId(req.tenantId);
@@ -722,9 +717,32 @@ async function createEvent(req, res, next) {
         location: tenantSettings.location_mode === 'calendar' ? (location || '') : undefined,
       }, defaultCalendarId).catch(() => null);
 
-      if (calEvent?.id) {
-        await supabase.from('appointments').update({ google_event_id: calEvent.id }).eq('id', appointment.id);
-      }
+      googleEventId = calEvent?.id || null;
+    }
+
+    const { data: appointment, error } = await supabase
+      .from('appointments')
+      .upsert({
+        tenant_id: req.tenantId,
+        contact_id: contactId,
+        service_id: serviceId,
+        user_id: req.userId,
+        scheduled_at: new Date(scheduledAt).toISOString(),
+        status: 'sin_enviar',
+        notes,
+        google_event_id: googleEventId,
+      }, { onConflict: 'tenant_id,google_event_id', ignoreDuplicates: true })
+      .select('*')
+      .maybeSingle();
+    if (error) throw error;
+
+    // No row back = a concurrent sync already created this appointment and already
+    // queued its confirmation. Return that one instead of sending a duplicate.
+    if (!appointment) {
+      const { data: existing } = await supabase
+        .from('appointments').select('*')
+        .eq('tenant_id', req.tenantId).eq('google_event_id', googleEventId).maybeSingle();
+      return res.status(201).json({ success: true, data: convertKeys(existing) });
     }
 
     const queueJob = (name, opts = {}) =>

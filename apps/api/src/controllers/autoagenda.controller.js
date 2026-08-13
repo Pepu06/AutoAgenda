@@ -220,6 +220,7 @@ async function _replaceRulesAndExceptions(scheduleId, rules, exceptions) {
       is_blocked:  Boolean(e.isBlocked ?? true),
       start_time:  e.startTime || null,
       end_time:    e.endTime   || null,
+      reason:      e.reason || null,
     }));
     const { error } = await supabase.from('schedule_exceptions').insert(rows);
     if (error) throw error;
@@ -427,8 +428,9 @@ async function listExceptions(req, res, next) {
 
 async function upsertException(req, res, next) {
   try {
-    const { date, isBlocked = true, startTime, endTime } = req.body;
+    const { date, isBlocked = true, startTime, endTime, reason } = req.body;
     if (!date) throw new ValidationError('date requerido (YYYY-MM-DD).');
+    const cleanReason = typeof reason === 'string' ? reason.trim().slice(0, 200) || null : null;
 
     const { data: schedules, error: schedErr } = await supabase
       .from('schedules').select('id').eq('tenant_id', req.tenantId);
@@ -445,10 +447,11 @@ async function upsertException(req, res, next) {
         is_blocked:  Boolean(isBlocked),
         start_time:  startTime || null,
         end_time:    endTime   || null,
+        reason:      cleanReason,
       });
     }
 
-    return res.json({ success: true, data: { date, isBlocked, startTime: startTime || null, endTime: endTime || null } });
+    return res.json({ success: true, data: { date, isBlocked, startTime: startTime || null, endTime: endTime || null, reason: cleanReason } });
   } catch (err) { return next(err); }
 }
 

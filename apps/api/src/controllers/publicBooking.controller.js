@@ -251,24 +251,10 @@ async function createBooking(req, res, next) {
     }
     const appointmentNotes = noteParts.join('\n') || null;
 
-    // Create appointment
-    const { data: appointment, error: aptErr } = await supabase
-      .from('appointments')
-      .insert({
-        tenant_id:         tenant.id,
-        contact_id:        contact.id,
-        service_id:        type.service_id,
-        user_id:           owner.id,
-        scheduled_at:      slotISO,
-        notes:             appointmentNotes,
-        autoagenda_type_id: type.id,
-        status:            'sin_enviar',
-      })
-      .select('id, scheduled_at')
-      .single();
-    if (aptErr) throw aptErr;
-
-    // Create Google Calendar event
+    // Create the Google Calendar event BEFORE the appointment row: a row without
+    // google_event_id is invisible to runCalendarSync's dedupe, so a sync running in
+    // that gap creates a second appointment and sends a second confirmation.
+    let googleEventId = null;
     console.log('[publicBooking] Calendar check — access_token:', !!owner.google_access_token, 'refresh_token:', !!owner.google_refresh_token);
     if (owner.google_access_token || owner.google_refresh_token) {
       try {
@@ -303,12 +289,7 @@ async function createBooking(req, res, next) {
             endDateTime:   endTime.toISOString(),
           });
           console.log('[publicBooking] Calendar event created successfully');
-          if (calEvent?.id) {
-            await supabase
-              .from('appointments')
-              .update({ google_event_id: calEvent.id })
-              .eq('id', appointment.id);
-          }
+          googleEventId = calEvent?.id || null;
         } else {
           console.warn('[publicBooking] No valid access token available, skipping calendar event');
         }
@@ -319,11 +300,42 @@ async function createBooking(req, res, next) {
       console.log('[publicBooking] No Google tokens for owner, skipping calendar event');
     }
 
+    // Create appointment
+    const { data: inserted, error: aptErr } = await supabase
+      .from('appointments')
+      .upsert({
+        tenant_id:         tenant.id,
+        contact_id:        contact.id,
+        service_id:        type.service_id,
+        user_id:           owner.id,
+        scheduled_at:      slotISO,
+        notes:             appointmentNotes,
+        autoagenda_type_id: type.id,
+        status:            'sin_enviar',
+        google_event_id:   googleEventId,
+      }, { onConflict: 'tenant_id,google_event_id', ignoreDuplicates: true })
+      .select('id, scheduled_at')
+      .maybeSingle();
+    if (aptErr) throw aptErr;
+
+    // No row back = a concurrent calendar sync already created this appointment and
+    // already queued its confirmation. Reuse it and stay silent instead of sending a
+    // second message for the same turno.
+    let appointment = inserted;
+    if (!appointment) {
+      const { data: existing } = await supabase
+        .from('appointments').select('id, scheduled_at')
+        .eq('tenant_id', tenant.id).eq('google_event_id', googleEventId).maybeSingle();
+      appointment = existing || { id: null, scheduled_at: slotISO };
+    }
+
     // Enqueue WhatsApp confirmation to client
-    appointmentsQueue.add(JobName.SEND_CONFIRMATION, { appointmentId: appointment.id }).catch(() => {});
+    if (inserted) {
+      appointmentsQueue.add(JobName.SEND_CONFIRMATION, { appointmentId: appointment.id }).catch(() => {});
+    }
 
     // Admin notification: nuevo turno
-    if (tenant.admin_alerts_enabled && tenant.admin_whatsapp) {
+    if (inserted && tenant.admin_alerts_enabled && tenant.admin_whatsapp) {
       try {
         const tz = tenant.timezone || 'America/Argentina/Buenos_Aires';
         const dateLabel = slotDate.toLocaleDateString('es-AR', { timeZone: tz, weekday: 'long', day: 'numeric', month: 'numeric' });

@@ -109,6 +109,7 @@ export default function CalendarPage() {
   const [blockMode, setBlockMode]               = useState('day');
   const [blockStartTime, setBlockStartTime]     = useState('09:00');
   const [blockEndTime, setBlockEndTime]         = useState('18:00');
+  const [blockReason, setBlockReason]           = useState('');
   const [blockSaving, setBlockSaving]           = useState(false);
 
   const fetchStatus = useCallback(async () => {
@@ -308,9 +309,10 @@ export default function CalendarPage() {
   async function handleBlockDay() {
     setBlockSaving(true);
     try {
+      const reason = blockReason.trim();
       const body = blockMode === 'day'
-        ? { date: selectedDate, isBlocked: true }
-        : { date: selectedDate, isBlocked: false, startTime: blockStartTime, endTime: blockEndTime };
+        ? { date: selectedDate, isBlocked: true, reason }
+        : { date: selectedDate, isBlocked: false, startTime: blockStartTime, endTime: blockEndTime, reason };
       await api.post('/autoagenda/exceptions', body);
       await fetchExceptions(currentDate.getFullYear(), currentDate.getMonth());
       setShowBlockModal(false);
@@ -554,7 +556,9 @@ export default function CalendarPage() {
                       : `⏱ Horario bloqueado: ${blockedDates[selectedDate].startTime?.slice(0,5)} – ${blockedDates[selectedDate].endTime?.slice(0,5)}`
                     }
                   </div>
-                  <div style={{ fontSize: 11.5, color: '#ef4444', marginTop: 2 }}>No se aceptan turnos este día</div>
+                  <div style={{ fontSize: 11.5, color: '#ef4444', marginTop: 2 }}>
+                    {blockedDates[selectedDate].reason || 'No se aceptan turnos este día'}
+                  </div>
                 </div>
                 <button
                   disabled={blockSaving}
@@ -570,7 +574,7 @@ export default function CalendarPage() {
               </div>
             ) : (
               <button
-                onClick={() => { setBlockMode('day'); setShowBlockModal(true); }}
+                onClick={() => { setBlockMode('day'); setBlockReason(''); setShowBlockModal(true); }}
                 style={{
                   width: '100%', marginBottom: 12, padding: '8px 14px',
                   borderRadius: 10, border: '1px dashed var(--border)',
@@ -673,6 +677,20 @@ export default function CalendarPage() {
                   </div>
                 </div>
               )}
+
+              <div>
+                <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                  Motivo (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={blockReason}
+                  maxLength={200}
+                  placeholder="Ej: vacaciones, feriado, congreso..."
+                  onChange={e => setBlockReason(e.target.value)}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14 }}
+                />
+              </div>
 
               <div style={{ fontSize: 12, color: 'var(--text-3)', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>
                 {blockMode === 'day'

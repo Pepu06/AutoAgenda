@@ -92,6 +92,7 @@ export default function ScheduleModal({ schedule, onSaved, onClose }) {
         isBlocked: e.isBlocked,
         startTime: e.startTime || null,
         endTime: e.endTime || null,
+        reason: e.reason || null,
       })));
     }
   }, [schedule]);

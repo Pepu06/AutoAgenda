@@ -13,3 +13,6 @@ dist/
 *.log
 npm-debug.log*
 .DS_Store
+
+# Local prod data dumps — never commit (contains customer data)
+prod.sql
