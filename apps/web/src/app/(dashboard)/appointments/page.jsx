@@ -40,8 +40,13 @@ export default function AppointmentsPage() {
   }, [fetchEvents]);
 
   async function handleStatusChange(eventId, status) {
-    await api.patch(`/calendar/events/${eventId}/status`, { status });
-    fetchEvents();
+    try {
+      await api.patch(`/calendar/events/${eventId}/status`, { status });
+      fetchEvents();
+    } catch (err) {
+      console.error('[Appointments] Status change failed:', err);
+      alert(err.message || 'No se pudo actualizar el estado');
+    }
   }
 
   async function handleDelete(appointmentId) {

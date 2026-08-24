@@ -509,17 +509,26 @@ async function events(req, res, next) {
       })
       .filter(e => !!e.phone);
 
-    // Sync GCal color+title for events whose DB status differs from GCal color (best effort)
+    // Sync GCal color+title for events whose DB status differs from GCal color (best effort).
+    // Sequential, not Promise.all: firing one PATCH per stale event concurrently burns
+    // through Google's per-user "queries per minute" quota on a single page load, which
+    // then 403s the user's own manual Confirmar/Cancelar click right after (Sentry NODE-F).
     const STATUS_SUFFIX = { confirmed: 'CONFIRMADO', cancelled: 'CANCELADO' };
-    for (const ev of data) {
-      const dbStatus = dbStatusMap[ev.id];
-      const gcalStatus = COLOR_STATUS[ev.colorId] || null;
-      if (dbStatus && dbStatus !== gcalStatus) {
-        const baseTitle = ev.title.replace(/\s*-\s*(CONFIRMADO|CANCELADO)$/i, '').trim();
-        const newTitle = STATUS_SUFFIX[dbStatus] ? `${baseTitle} - ${STATUS_SUFFIX[dbStatus]}` : baseTitle;
-        updateEventTitleAndColor(accessToken, ev.id, newTitle, dbStatus, { sendUpdates: 'none', calendarId: defaultCalendarId }).catch(() => { });
+    (async () => {
+      for (const ev of data) {
+        const dbStatus = dbStatusMap[ev.id];
+        const gcalStatus = COLOR_STATUS[ev.colorId] || null;
+        if (dbStatus && dbStatus !== gcalStatus) {
+          const baseTitle = ev.title.replace(/\s*-\s*(CONFIRMADO|CANCELADO)$/i, '').trim();
+          const newTitle = STATUS_SUFFIX[dbStatus] ? `${baseTitle} - ${STATUS_SUFFIX[dbStatus]}` : baseTitle;
+          try {
+            await updateEventTitleAndColor(accessToken, ev.id, newTitle, dbStatus, { sendUpdates: 'none', calendarId: defaultCalendarId });
+          } catch (err) {
+            logger.warn({ err: err.message, eventId: ev.id }, 'Background GCal status sync failed');
+          }
+        }
       }
-    }
+    })();
 
     if (data.length && canCreateAppointments) {
       runCalendarSync(req.userId, req.tenantId).catch(err =>
