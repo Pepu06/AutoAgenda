@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { supabase, convertKeys } = require('@autoagenda/db');
+const { supabase, convertKeys, withRetry } = require('@autoagenda/db');
 const { AppError } = require('../errors');
 
 const ALLOWED_FIELDS = [
@@ -33,8 +33,8 @@ function stripSecretFields(data) {
 async function getSettings(req, res, next) {
   try {
     const [settingsResult, baileysResult] = await Promise.all([
-      supabase.from('tenants').select(SELECT_COLS).eq('id', req.tenantId).single(),
-      supabase.from('baileys_sessions').select('connected').eq('tenant_id', req.tenantId).single(),
+      withRetry(() => supabase.from('tenants').select(SELECT_COLS).eq('id', req.tenantId).single()),
+      withRetry(() => supabase.from('baileys_sessions').select('connected').eq('tenant_id', req.tenantId).single()),
     ]);
 
     if (settingsResult.error) throw settingsResult.error;
