@@ -256,7 +256,13 @@ export default function CalendarPage() {
       services.length ? Promise.resolve({ data: services }) : api.get('/services'),
       api.get('/settings'),
     ];
-    const [c, s, settings] = await Promise.all(promises);
+    let c, s, settings;
+    try {
+      [c, s, settings] = await Promise.all(promises);
+    } catch (err) {
+      alert(err.message || 'Error al cargar los datos para crear la cita');
+      return;
+    }
     if (!contacts.length) setContacts(c.data || []);
     if (!services.length) setServices(s.data || []);
     setLocationMode(settings.data?.locationMode || 'fixed');
