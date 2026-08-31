@@ -22,21 +22,32 @@ El prompt de referencia proponía `@afipsdk/afip.js`. Se reemplaza por
 
 | | `@afipsdk/afip.js` | `@arcasdk/core` |
 |---|---|---|
-| Cuenta de terceros | requiere `access_token` de afipsdk.com | no requiere nada |
+| Cuenta de terceros | requiere `access_token` de afipsdk.com | habla directo con ARCA, no requiere nada |
 | Numeración | `getLastVoucher` + `createVoucher` a mano | `createNextVoucher` lo hace en un paso |
-| PDF + QR | HTML propio → servicio remoto `createPDF` | `@arcasdk/pdf` local, QR incluido (`includeQr: true`) |
 
 Consecuencias del cambio respecto del prompt original:
 
 - **Se elimina la env var `AFIP_ACCESS_TOKEN`** y el gotcha #6 del prompt.
-- **Se elimina el armado manual del QR** (base64 + URL `afip.gob.ar/fe/qr/`) —
-  lo hace `@arcasdk/pdf`.
 - **Ya no aplica el truco del CUIT de prueba sin certificado.** `@arcasdk/core`
   necesita certificado de homologación también en testing. El usuario carga
   cert+key antes de poder facturar, en cualquiera de los dos modos.
 - Es un paquete TypeScript/ESM y el repo es CommonJS → se carga con
   `await import()` perezoso dentro de la función de emisión (mismo patrón que ya
   proponía el prompt).
+
+Sus dependencias son livianas y verificadas: `node-forge`, `soap`, `std-env`,
+`xml2js`. Nada de binarios pesados.
+
+### `@arcasdk/pdf` queda descartado
+
+El paquete complementario que arma el PDF con diseño oficial y QR **no se usa**.
+Verificado con `npm view @arcasdk/pdf dependencies`: trae `puppeteer: ^24.43.1`
+como dependencia directa. Este repo deploya en **Railway con NIXPACKS**
+(`railway.json`) y hoy no tiene Puppeteer en el lockfile — sumarlo implica
+descargar Chromium en cada build, que es exactamente el problema que ya obligó
+a sacar Puppeteer del proyecto de referencia (Inmoo).
+
+El comprobante se resuelve sin él — ver la sección "Comprobante imprimible".
 
 ### Almacenamiento del ticket WSAA (no es opcional)
 
@@ -191,16 +202,43 @@ Mandar `Iva` en una C, u omitirlo en una A/B con importe > 0, produce el error
 AFIP 10070. `CondicionIVAReceptorId` es obligatorio en los tres tipos desde la
 RG 5616 — sin ese campo AFIP rechaza el comprobante.
 
-## PDF: generado a demanda, no almacenado
+## Comprobante imprimible: HTML a demanda, sin Puppeteer
 
-`@arcasdk/pdf` arma el PDF (con QR de verificación ARCA) a partir de datos que
-la fila de `invoices` ya contiene íntegramente, incluido `emisor_snapshot`.
-Entonces `GET /invoices/:id/pdf` genera y devuelve el PDF en el momento.
+Descartado `@arcasdk/pdf` (Chromium en el build de Railway) y descartado también
+renderizar HTML→PDF en el servidor, porque cualquier renderer headless trae el
+mismo Chromium.
 
-Esto elimina toda la sección 5 del prompt original: sin bucket de storage, sin
-subida best-effort, sin reintento en background, sin estado "PDF pendiente". La
-generación es determinística y barata, y el CAE — que es lo único fiscalmente
-relevante — ya está firme en la base.
+`GET /afip/invoices/:id/comprobante` devuelve **una página HTML** con el diseño
+del comprobante y `@media print`, generada a partir de la fila de `invoices` —
+que ya contiene todo, incluido `emisor_snapshot`. El usuario hace "Imprimir →
+Guardar como PDF" desde el navegador.
+
+Esto es suficiente fiscalmente: AFIP regula **qué tiene que contener** el
+comprobante (CAE, vencimiento, QR, datos de emisor y receptor), no en qué
+formato de archivo se lo entregás.
+
+El QR se arma a mano con el formato documentado por AFIP, usando **`qrcode`, que
+ya es dependencia de `apps/api`** — cero paquetes nuevos:
+
+```js
+const payload = {
+  ver: 1, fecha: 'AAAA-MM-DD', cuit: emisorCuit, ptoVta, tipoCmp: cbteTipo,
+  nroCmp: numero, importe: impTotal, moneda: 'PES', ctz: 1,
+  tipoDocRec: docTipo, nroDocRec: docNro,
+  tipoCodAut: 'E', codAut: Number(cae),
+};
+const url = `https://www.afip.gob.ar/fe/qr/?p=${Buffer.from(JSON.stringify(payload)).toString('base64')}`;
+const qrDataUri = await QRCode.toDataURL(url);   // <img src="${qrDataUri}">
+```
+
+Como el HTML se genera en el momento, se cae toda la sección 5 del prompt
+original: sin bucket de storage, sin subida best-effort, sin reintento en
+background, sin estado "PDF pendiente". Es determinístico y barato, y el CAE —
+lo único fiscalmente relevante — ya está firme en la base.
+
+Si más adelante hace falta un PDF real desde el servidor (para adjuntarlo a un
+mail o mandarlo por WhatsApp), el camino es una librería PDF pura como `pdfkit`,
+nunca un headless browser. Queda anotado, no se implementa ahora.
 
 ## Concurrencia en la numeración
 
@@ -226,7 +264,7 @@ Montado en `/afip` desde `app.js`, con el middleware `auth` (scope por
 | PUT | `/afip/config` | Guarda config; cifra cert/key si vienen en el body |
 | GET | `/afip/invoices` | Lista de comprobantes del tenant (paginada) |
 | POST | `/afip/invoices` | Emite: valida → arma voucher → AFIP → INSERT |
-| GET | `/afip/invoices/:id/pdf` | Genera y devuelve el PDF |
+| GET | `/afip/invoices/:id/comprobante` | Devuelve el comprobante en HTML imprimible, con QR |
 
 Errores vía las clases de `src/errors/index.js` (`ValidationError`,
 `NotFoundError`, `AppError`) — nunca `Error` pelado, según CLAUDE.md.
@@ -252,7 +290,8 @@ suscripción del tenant a RecordAI y no tiene relación con esto.
 | `apps/api/src/utils/crypto.js` | `encrypt`/`decrypt` AES-256-GCM | `ENCRYPTION_KEY` |
 | `apps/api/src/services/afip/buildVoucher.js` | **función pura**: input del form + config → objeto voucher | nada |
 | `apps/api/src/services/afip/ticketStorage.js` | `ITicketStoragePort` sobre Supabase | supabase |
-| `apps/api/src/services/afip/index.js` | instancia el SDK, emite, genera PDF | los tres de arriba, SDK |
+| `apps/api/src/services/afip/index.js` | instancia el SDK y emite el comprobante | los dos de arriba, SDK |
+| `apps/api/src/services/afip/comprobanteHtml.js` | fila de `invoices` → HTML imprimible + QR | `qrcode` |
 | `apps/api/src/controllers/afip.controller.js` | HTTP, validación, persistencia | service, supabase |
 | `apps/api/src/routes/afip.routes.js` | routing | controller, auth |
 
@@ -278,6 +317,8 @@ El repo ya tiene jest configurado (`apps/api/src/__tests__/`, `npm test` en
 - redondeo: un total como `100` no produce centavos que no cierren
 - `crypto.js`: `decrypt(encrypt(x)) === x`, y que dos cifrados del mismo texto
   difieran (IV aleatorio)
+- payload del QR: los campos y el orden que exige AFIP, y que el base64 decodifique
+  al JSON original
 
 Sin red, sin mocks del SDK, sin fixtures.
 
@@ -299,4 +340,5 @@ con default `''`, y a la lista de `required` bajo `NODE_ENV === 'production'`.
 - Lista de ítems por comprobante.
 - CUIT persistido en `contacts`.
 - Lock de numeración (ver arriba).
-- Envío del PDF por WhatsApp/mail al cliente.
+- Envío del comprobante por WhatsApp/mail al cliente. Eso sí necesitaría un PDF
+  real generado en el servidor — con `pdfkit`, nunca con un headless browser.
