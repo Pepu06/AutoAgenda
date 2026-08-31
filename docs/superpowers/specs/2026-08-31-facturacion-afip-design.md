@@ -31,12 +31,41 @@ Consecuencias del cambio respecto del prompt original:
 - **Ya no aplica el truco del CUIT de prueba sin certificado.** `@arcasdk/core`
   necesita certificado de homologación también en testing. El usuario carga
   cert+key antes de poder facturar, en cualquiera de los dos modos.
-- Es un paquete TypeScript/ESM y el repo es CommonJS → se carga con
-  `await import()` perezoso dentro de la función de emisión (mismo patrón que ya
-  proponía el prompt).
+- El paquete publicado es **CommonJS** (`main: lib/index.js`, salida de `tsc`),
+  así que un `require('@arcasdk/core')` normal alcanza — no hace falta el
+  `await import()` perezoso que proponía el prompt. La instancia igual se arma
+  al momento de facturar, porque depende del cert desencriptado del tenant.
 
 Sus dependencias son livianas y verificadas: `node-forge`, `soap`, `std-env`,
 `xml2js`. Nada de binarios pesados.
+
+### Gotcha crítico: el SDK no lanza excepción cuando AFIP rechaza
+
+Verificado en `lib/infrastructure/repositories/electronic-billing/electronic-billing-repository.js`:
+
+```js
+const cae = detResponse?.Resultado === "A" ? detResponse.CAE || "" : "";
+```
+
+Si AFIP rechaza el comprobante (`Resultado: "R"`), `createNextVoucher` **resuelve
+normalmente** con `cae: ""` — no tira error. Sin un chequeo explícito, el
+`INSERT` guardaría una factura con CAE vacío y el usuario vería "emitida".
+
+Entonces, obligatorio después de cada emisión:
+
+```js
+if (!result.cae) {
+  const det  = result.response?.FeDetResp?.FECAEDetResponse?.[0];
+  const msgs = [
+    ...(result.response?.Errors?.Err ?? []),
+    ...(det?.Observaciones?.Obs ?? []),
+  ].map((e) => `${e.Code}: ${e.Msg}`);
+  throw new AppError(`AFIP rechazó el comprobante — ${msgs.join(' | ')}`, 400);
+}
+```
+
+Los mensajes de AFIP se le muestran al usuario tal cual: son accionables
+("el punto de venta no está habilitado", "el número no es correlativo").
 
 ### `@arcasdk/pdf` queda descartado
 
@@ -60,6 +89,21 @@ inaccesible y rompe la facturación por hasta 12 horas.
 implementa una versión respaldada en Supabase (tabla `afip_tickets`, clave
 tenant + servicio). No es gold-plating: sin esto el sistema se rompe en cada
 deploy.
+
+La interfaz, leída del paquete publicado:
+
+```ts
+interface ITicketStoragePort {
+  save(ticket: AccessTicket, serviceName: string): Promise<void>;
+  get(serviceName: string): Promise<AccessTicket | null>;
+  delete(serviceName: string): Promise<void>;
+}
+```
+
+Se serializa igual que hace `MemoryTicketStorage` del propio SDK:
+`{ header: ticket.getHeaders(), credentials: ticket.getCredentials() }`, y se
+reconstruye con `AccessTicket.create(data)`. `AccessTicket` expone `isExpired()`
+para descartar tickets vencidos al leerlos.
 
 ## Modelo de datos
 
