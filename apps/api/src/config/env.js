@@ -37,6 +37,7 @@ const envSchema = z.object({
   PAYMENT_ALIAS:               z.string().optional().default(''),
   GMAIL_USER:                  z.string().optional().default(''),
   GMAIL_APP_PASSWORD:          z.string().optional().default(''),
+  ENCRYPTION_KEY:              z.string().optional().default(''),
 }).superRefine((data, ctx) => {
   if (data.NODE_ENV !== 'production') return;
   // Secrets that must be set explicitly in production (no insecure defaults).
@@ -45,6 +46,7 @@ const envSchema = z.object({
     WHATSAPP_VERIFY_TOKEN: data.WHATSAPP_VERIFY_TOKEN,
     ADMIN_PANEL_PASSWORD: data.ADMIN_PANEL_PASSWORD,
     AUTOAGENDA_WEBHOOK_SECRET: data.AUTOAGENDA_WEBHOOK_SECRET,
+    ENCRYPTION_KEY: data.ENCRYPTION_KEY,
   };
   for (const [key, value] of Object.entries(required)) {
     if (!value) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required in production` });
