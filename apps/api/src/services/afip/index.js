@@ -27,6 +27,12 @@ function getArcaInstance(config) {
   });
 }
 
+// AFIP a veces devuelve un único objeto en vez de un array cuando sólo hay un
+// error/observación (cardinalidad del WSDL). Normaliza ambos casos a array.
+function asArray(x) {
+  return [].concat(x ?? []);
+}
+
 // El SDK NO lanza excepción cuando AFIP rechaza: devuelve cae: "" y deja el
 // detalle en response.Errors.Err y en Observaciones.Obs. Sin este chequeo
 // guardaríamos una factura con CAE vacío y le diríamos al usuario que se emitió.
@@ -35,11 +41,13 @@ function assertAceptado(result) {
 
   const det = result?.response?.FeDetResp?.FECAEDetResponse?.[0];
   const mensajes = [
-    ...(result?.response?.Errors?.Err ?? []),
-    ...(det?.Observaciones?.Obs ?? []),
+    ...asArray(result?.response?.Errors?.Err),
+    ...asArray(det?.Observaciones?.Obs),
   ]
-    .map((e) => `${e.Code}: ${e.Msg}`)
-    .filter(Boolean);
+    // Sin Code ni Msg no hay nada útil que mostrar — mejor omitirlo que
+    // mandarle al usuario el literal "undefined: undefined".
+    .filter((e) => e && (e.Code !== undefined || e.Msg !== undefined))
+    .map((e) => `${e.Code}: ${e.Msg}`);
 
   const detalle = mensajes.length ? mensajes.join(' | ') : 'sin detalle';
   throw new AppError(`AFIP rechazó el comprobante — ${detalle}`, 400);
@@ -60,17 +68,44 @@ async function emitirComprobante(config, input) {
   const voucher = buildVoucher(config, input);
   const arca = getArcaInstance(config);
 
-  const result = await arca.electronicBillingService.createNextVoucher(voucher);
+  // Todo lo que createNextVoucher puede tirar (WSAA rechazado, SOAP roto, red
+  // caída, cert/key inválidos) llegaba como Internal Server Error genérico.
+  // Se traduce a un mensaje accionable, salvo que ya sea un AppError nuestro.
+  let result;
+  try {
+    result = await arca.electronicBillingService.createNextVoucher(voucher);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(`No se pudo conectar con AFIP: ${err.message}`, 502);
+  }
+
   assertAceptado(result);
 
   const numero = result?.response?.FeDetResp?.FECAEDetResponse?.[0]?.CbteDesde;
   if (!numero) {
+    // AFIP ya aceptó el comprobante (hay CAE) pero no pudimos leer el número —
+    // se loguea para poder recuperarlo a mano, igual que el INSERT fallido.
+    logger.error(
+      { tenantId: config.tenantId, cae: result.cae, caeVto: result.caeFchVto },
+      'afip_voucher_number_or_date_parse_failed',
+    );
     throw new AppError('AFIP no devolvió el número de comprobante.', 502);
+  }
+
+  let caeVto;
+  try {
+    caeVto = parseAfipDate(result.caeFchVto);
+  } catch (err) {
+    logger.error(
+      { tenantId: config.tenantId, cae: result.cae, caeVto: result.caeFchVto },
+      'afip_voucher_number_or_date_parse_failed',
+    );
+    throw err;
   }
 
   return {
     cae: result.cae,
-    caeVto: parseAfipDate(result.caeFchVto),
+    caeVto,
     numero: Number(numero),
     voucher,
   };

@@ -221,7 +221,11 @@ export default function SettingsPage() {
     setAfipSaved(false);
     const body = {
       cuit: afip.cuit,
-      situacionFiscal: afip.situacionFiscal,
+      // El <select> ya muestra "Monotributo" preseleccionado vía este mismo
+      // fallback (ver más abajo) aunque el usuario nunca lo haya tocado —
+      // hay que mandar lo mismo que se ve, si no el guardado inicial omite
+      // la columna NOT NULL situacion_fiscal y el backend tira un 500.
+      situacionFiscal: afip.situacionFiscal || 'monotributo',
       puntoVenta: Number(afip.puntoVenta),
       razonSocial: afip.razonSocial,
       domicilioComercial: afip.domicilioComercial,

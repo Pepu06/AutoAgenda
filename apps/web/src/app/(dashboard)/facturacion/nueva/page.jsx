@@ -21,6 +21,12 @@ function NuevaFacturaContent() {
   const [config, setConfig] = useState(null);
   const [cbteTipo, setCbteTipo] = useState(null);
   const [prefill, setPrefill] = useState({});
+  // Sin appointmentId no hay nada que esperar. Con appointmentId, el form no
+  // puede renderizar los <input type="date"> hasta que la precarga resuelva:
+  // son defaultValue (no controlados), y React no reaplica un defaultValue
+  // sobre un input ya "dirty" — si el form monta con hoyIso() y la precarga
+  // llega después, el cambio se ignora en silencio y queda mal la fecha.
+  const [prefillReady, setPrefillReady] = useState(!appointmentId);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -48,7 +54,8 @@ function NuevaFacturaContent() {
           fecha: String(a.scheduledAt || '').slice(0, 10) || hoyIso(),
         });
       })
-      .catch(() => { /* la precarga es una comodidad: si falla, se carga a mano */ });
+      .catch(() => { /* la precarga es una comodidad: si falla, se carga a mano */ })
+      .finally(() => setPrefillReady(true));
   }, [appointmentId]);
 
   async function handleSubmit(e) {
@@ -83,7 +90,7 @@ function NuevaFacturaContent() {
     }
   }
 
-  if (!config) return <p className={styles.state}>Cargando…</p>;
+  if (!config || !prefillReady) return <p className={styles.state}>Cargando…</p>;
 
   if (!config.certConfigured) {
     return (

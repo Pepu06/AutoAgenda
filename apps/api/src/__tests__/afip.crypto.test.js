@@ -6,6 +6,7 @@
 process.env.ENCRYPTION_KEY = '0'.repeat(64);
 
 const { encrypt, decrypt } = require('../utils/crypto');
+const { AppError } = require('../errors');
 
 describe('encrypt/decrypt', () => {
   test('round-trips a value unchanged', () => {
@@ -33,11 +34,14 @@ describe('encrypt/decrypt', () => {
     const flipped = Buffer.from(ct, 'base64');
     flipped[0] ^= 0xff;
     const tampered = `${iv}:${tag}:${flipped.toString('base64')}`;
-    expect(() => decrypt(tampered)).toThrow();
+    // El módulo crypto tira un error nativo (auth tag inválido) — se traduce
+    // a AppError para que el caller nunca vea el tipo nativo.
+    expect(() => decrypt(tampered)).toThrow(AppError);
+    expect(() => decrypt(tampered)).toThrow(/No se pudo descifrar/);
   });
 
   test('rejects a malformed payload', () => {
-    expect(() => decrypt('no-tiene-formato')).toThrow();
+    expect(() => decrypt('no-tiene-formato')).toThrow(AppError);
   });
 
   test('accepts a base64 key as well as hex', () => {

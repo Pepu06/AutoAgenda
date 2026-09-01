@@ -72,6 +72,29 @@ async function updateConfig(req, res, next) {
 
     if (!Object.keys(updates).length) throw new AppError('No hay campos para actualizar.', 400);
 
+    // En el primer guardado de un tenant no hay fila previa: si el caller
+    // (frontend o no) omite alguna columna NOT NULL, el upsert la INSERTa sin
+    // valor y Postgres tira un 500 crudo. Se valida acá para devolver un 422
+    // accionable antes de llegar a la base.
+    const { data: existing, error: existingError } = await supabase
+      .from('afip_config')
+      .select('tenant_id')
+      .eq('tenant_id', req.tenantId)
+      .maybeSingle();
+    if (existingError) throw existingError;
+
+    if (!existing) {
+      const REQUIRED_ON_INSERT = {
+        cuit: 'El CUIT', situacion_fiscal: 'La situación fiscal',
+        punto_venta: 'El punto de venta', razon_social: 'La razón social',
+      };
+      for (const [field, label] of Object.entries(REQUIRED_ON_INSERT)) {
+        if (updates[field] === undefined || updates[field] === null || updates[field] === '') {
+          throw new ValidationError(`${label} es obligatoria para guardar la configuración de AFIP.`);
+        }
+      }
+    }
+
     updates.tenant_id = req.tenantId;
     updates.updated_at = new Date().toISOString();
 
@@ -133,8 +156,10 @@ async function listInvoices(req, res, next) {
 
     if (req.query.appointmentId) query = query.eq('appointment_id', req.query.appointmentId);
 
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
-    const offset = Number(req.query.offset) || 0;
+    // Clampea contra valores negativos/basura (ej. ?limit=-5) para que nunca
+    // llegue un rango inválido a .range() y produzca un 500.
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 50, 200));
+    const offset = Math.max(0, Number(req.query.offset) || 0);
     query = query.range(offset, offset + limit - 1);
 
     const { data, error } = await query;
@@ -201,6 +226,7 @@ async function createInvoice(req, res, next) {
       // como salió, aunque después edite su configuración.
       emisor_snapshot: {
         cuit: emisor.cuit,
+        situacionFiscal: emisor.situacionFiscal,
         razonSocial: emisor.razonSocial,
         domicilioComercial: emisor.domicilioComercial,
         ingresosBrutos: emisor.ingresosBrutos,

@@ -40,11 +40,22 @@ function decrypt(payload) {
   const parts = String(payload).split(':');
   if (parts.length !== 3) throw new AppError('Payload cifrado inválido', 500);
 
-  const [iv, authTag, ciphertext] = parts.map((p) => Buffer.from(p, 'base64'));
-  const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv);
-  decipher.setAuthTag(authTag);
-  // .final() lanza si el authTag no valida — ese es el punto de GCM.
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  try {
+    const [iv, authTag, ciphertext] = parts.map((p) => Buffer.from(p, 'base64'));
+    const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv);
+    decipher.setAuthTag(authTag);
+    // .final() lanza si el authTag no valida — ese es el punto de GCM.
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  } catch (err) {
+    // Tag manipulado, IV de largo incorrecto, clave rotada — el módulo crypto
+    // tira un RangeError/Error nativo. No hay nada que el usuario pueda hacer
+    // con ese mensaje: se traduce a una acción concreta.
+    if (err instanceof AppError) throw err;
+    throw new AppError(
+      'No se pudo descifrar el certificado de AFIP. Volvé a cargarlo en Ajustes.',
+      500,
+    );
+  }
 }
 
 module.exports = { encrypt, decrypt };
