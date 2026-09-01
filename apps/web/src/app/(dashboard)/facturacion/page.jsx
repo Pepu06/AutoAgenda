@@ -50,7 +50,14 @@ export default function FacturacionPage() {
       const res = await fetch(`${API_URL}/afip/invoices/${id}/comprobante`, {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (!res.ok) throw new Error('No se pudo generar el comprobante');
+      if (!res.ok) {
+        let message = 'No se pudo generar el comprobante';
+        try {
+          const body = await res.json();
+          if (body?.error) message = body.error;
+        } catch { /* la respuesta no era JSON (ej. HTML de error): se usa el mensaje genérico */ }
+        throw new Error(message);
+      }
       const html = await res.text();
       win.document.open();
       win.document.write(html);
