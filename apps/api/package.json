@@ -9,6 +9,7 @@
     "test": "node ../../node_modules/.bin/jest --testPathPatterns=src/__tests__ --no-coverage"
   },
   "dependencies": {
+    "@arcasdk/core": "^2.0.0",
     "@autoagenda/db": "*",
     "@autoagenda/shared": "*",
     "@sentry/node": "^10.47.0",
