@@ -74,6 +74,7 @@ app.use('/dashboard', dashboardRoutes);
 app.use('/autoagenda', autoagendaRoutes);
 app.use('/baileys', require('./routes/baileys.routes'));
 app.use('/integrations', require('./routes/integrations.routes'));
+app.use('/afip', require('./routes/afip.routes'));
 
 // Sentry error handler must come before other error middleware
 if (env.SENTRY_DSN && env.NODE_ENV === 'production') {
