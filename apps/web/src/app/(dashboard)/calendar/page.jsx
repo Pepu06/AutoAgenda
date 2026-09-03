@@ -203,9 +203,13 @@ export default function CalendarPage() {
 
   async function handleDisconnect() {
     if (!confirm('¿Desconectar Google Calendar?')) return;
-    await api.post('/calendar/disconnect');
-    setConnected(false);
-    setEvents([]);
+    try {
+      await api.post('/calendar/disconnect');
+      setConnected(false);
+      setEvents([]);
+    } catch (err) {
+      alert(err.message || 'Error al desconectar Google Calendar');
+    }
   }
 
   async function handleCreateContact(e) {
@@ -251,25 +255,29 @@ export default function CalendarPage() {
       alert('Este día está bloqueado. Desbloquealo antes de crear una cita.');
       return;
     }
-    const promises = [
-      contacts.length ? Promise.resolve({ data: contacts }) : api.get('/contacts'),
-      services.length ? Promise.resolve({ data: services }) : api.get('/services'),
-      api.get('/settings'),
-    ];
-    const [c, s, settings] = await Promise.all(promises);
-    if (!contacts.length) setContacts(c.data || []);
-    if (!services.length) setServices(s.data || []);
-    setLocationMode(settings.data?.locationMode || 'fixed');
-    setCreateForm(EMPTY_CREATE);
-    const parts = selectedDate ? selectedDate.split('-') : new Date().toLocaleDateString('en-CA').split('-');
-    setCreateYear(parts[0]); setCreateMonth(parts[1]); setCreateDay(parts[2]);
-    setCreateHour('09'); setCreateMin('00');
-    setCreateError('');
-    setShowNewContact(false);
-    setShowNewService(false);
-    setNewContactName(''); setNewContactPhone('');
-    setNewServiceName(''); setNewServiceDuration('30');
-    setShowCreate(true);
+    try {
+      const promises = [
+        contacts.length ? Promise.resolve({ data: contacts }) : api.get('/contacts'),
+        services.length ? Promise.resolve({ data: services }) : api.get('/services'),
+        api.get('/settings'),
+      ];
+      const [c, s, settings] = await Promise.all(promises);
+      if (!contacts.length) setContacts(c.data || []);
+      if (!services.length) setServices(s.data || []);
+      setLocationMode(settings.data?.locationMode || 'fixed');
+      setCreateForm(EMPTY_CREATE);
+      const parts = selectedDate ? selectedDate.split('-') : new Date().toLocaleDateString('en-CA').split('-');
+      setCreateYear(parts[0]); setCreateMonth(parts[1]); setCreateDay(parts[2]);
+      setCreateHour('09'); setCreateMin('00');
+      setCreateError('');
+      setShowNewContact(false);
+      setShowNewService(false);
+      setNewContactName(''); setNewContactPhone('');
+      setNewServiceName(''); setNewServiceDuration('30');
+      setShowCreate(true);
+    } catch (err) {
+      alert(err.message || 'Error al abrir el formulario de nueva cita');
+    }
   }
 
   async function handleCreateEvent(e) {
