@@ -26,15 +26,30 @@ app.set('trust proxy', 1);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 
-const allowedOrigins = env.CORS_ORIGIN
-  ? env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean)
-  : [];
+// Each configured origin implicitly allows its www./non-www. counterpart too, so
+// CORS_ORIGIN doesn't need both variants listed out for the same site.
+function withWwwVariant(origin) {
+  try {
+    const u = new URL(origin);
+    if (u.hostname.startsWith('www.')) {
+      return [origin, `${u.protocol}//${u.hostname.slice(4)}${u.port ? ':' + u.port : ''}`];
+    }
+    return [origin, `${u.protocol}//www.${u.hostname}${u.port ? ':' + u.port : ''}`];
+  } catch {
+    return [origin];
+  }
+}
+
+const allowedOrigins = new Set(
+  (env.CORS_ORIGIN ? env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean) : [])
+    .flatMap(withWwwVariant)
+);
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, server-to-server)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (allowedOrigins.has(origin)) return callback(null, true);
     callback(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
