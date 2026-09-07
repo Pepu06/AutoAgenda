@@ -113,8 +113,10 @@ export default function CalendarPage() {
   const [blockSaving, setBlockSaving]           = useState(false);
 
   const fetchStatus = useCallback(async () => {
-    const res = await api.get('/calendar/status');
-    setConnected(res.data.connected);
+    try {
+      const res = await api.get('/calendar/status');
+      setConnected(res.data.connected);
+    } catch { /* session expired or status check failed — leave connected as-is */ }
   }, []);
 
   const fetchEvents = useCallback(async () => {
