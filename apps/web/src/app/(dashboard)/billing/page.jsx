@@ -43,7 +43,7 @@ export default function BillingPage() {
     return (
       <div className={s.page}>
         <div className={s.header}>
-          <h1 className={s.title}>Facturación</h1>
+          <h1 className={s.title}>Mi suscripción</h1>
         </div>
         <div style={{ fontSize: 14, color: 'var(--text-2)' }}>
           No se encontró información de suscripción.{' '}
@@ -73,7 +73,7 @@ export default function BillingPage() {
   return (
     <div className={s.page}>
       <div className={s.header}>
-        <h1 className={s.title}>Facturación</h1>
+        <h1 className={s.title}>Mi suscripción</h1>
         <p className={s.subtitle}>Administrá tu plan y seguí el uso de mensajes.</p>
       </div>
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { api } from '../../../lib/api';
 import styles from './appointments.module.css';
 import tableStyles from '../../../components/appointments/AppointmentTable.module.css';
@@ -24,6 +25,7 @@ export default function AppointmentsPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [search, setSearch] = useState('');
   const [editingEvent, setEditingEvent] = useState(null);
+  const [facturados, setFacturados] = useState(new Set());
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -39,6 +41,13 @@ export default function AppointmentsPage() {
     fetchEvents().finally(() => setLoading(false));
   }, [fetchEvents]);
 
+  useEffect(() => {
+    api.get('/afip/invoices?limit=200')
+      .then((res) => {
+        setFacturados(new Set((res.data || []).map((i) => i.appointmentId).filter(Boolean)));
+      })
+      .catch(() => {});
+  }, []);
   async function handleStatusChange(eventId, status) {
     try {
       await api.patch(`/calendar/events/${eventId}/status`, { status });
@@ -191,6 +200,11 @@ export default function AppointmentsPage() {
                             >
                               Eliminar
                             </button>
+                            {facturados.has(e.appointmentId) ? (
+                              <span className={styles.badgeFacturado}>Facturado ✓</span>
+                            ) : (
+                              <Link href={`/facturacion/nueva?appointmentId=${e.appointmentId}`}>Facturar</Link>
+                            )}
                           </>
                         )}
                       </div>

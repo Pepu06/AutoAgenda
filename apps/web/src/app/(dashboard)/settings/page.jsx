@@ -81,6 +81,12 @@ export default function SettingsPage() {
   const [gsSecret, setGsSecret] = useState('');
   const [gsSecretLoading, setGsSecretLoading] = useState(false);
   const [gsSecretError, setGsSecretError] = useState('');
+  const [afip, setAfip] = useState(null);
+  const [afipCert, setAfipCert] = useState('');
+  const [afipKey, setAfipKey] = useState('');
+  const [afipSaving, setAfipSaving] = useState(false);
+  const [afipSaved, setAfipSaved] = useState(false);
+  const [afipError, setAfipError] = useState('');
   const eventSourceRef = useRef(null);
   const isLoadedRef = useRef(false);
   const autoSaveTimerRef = useRef(null);
@@ -89,6 +95,9 @@ export default function SettingsPage() {
     api.get('/settings/onboarding').then(res => {
       if (res.data?.completed === false) setOnboardingCompleted(false);
     }).catch(() => {});
+    api.get('/afip/config')
+      .then(res => setAfip(res.data))
+      .catch(() => setAfip({ configured: false, certConfigured: false }));
     api.get('/settings').then(res => {
       const d = res.data;
       const mapped = {};
@@ -199,6 +208,49 @@ export default function SettingsPage() {
       setGsSecretError(err.message || 'Error al generar el secreto');
     } finally {
       setGsSecretLoading(false);
+    }
+  }
+
+  function setAfipField(key, value) {
+    setAfip(a => ({ ...a, [key]: value }));
+  }
+
+  async function handleAfipSave() {
+    setAfipSaving(true);
+    setAfipError('');
+    setAfipSaved(false);
+    const body = {
+      cuit: afip.cuit,
+      // El <select> ya muestra "Monotributo" preseleccionado vía este mismo
+      // fallback (ver más abajo) aunque el usuario nunca lo haya tocado —
+      // hay que mandar lo mismo que se ve, si no el guardado inicial omite
+      // la columna NOT NULL situacion_fiscal y el backend tira un 500.
+      situacionFiscal: afip.situacionFiscal || 'monotributo',
+      puntoVenta: Number(afip.puntoVenta),
+      razonSocial: afip.razonSocial,
+      domicilioComercial: afip.domicilioComercial,
+      ingresosBrutos: afip.ingresosBrutos,
+      fechaInicioActividades: afip.fechaInicioActividades || null,
+      production: Boolean(afip.production),
+    };
+    // Sólo se mandan si el usuario los pegó ahora: si los deja vacíos, se
+    // conservan cert/key que ya están guardados.
+    const cert = afipCert.trim();
+    const key = afipKey.trim();
+    if (cert) body.cert = cert;
+    if (key) body.key = key;
+
+    try {
+      const res = await api.put('/afip/config', body);
+      setAfip(res.data);
+      setAfipCert('');
+      setAfipKey('');
+      setAfipSaved(true);
+      setTimeout(() => setAfipSaved(false), 3000);
+    } catch (err) {
+      setAfipError(err.message || 'Error al guardar');
+    } finally {
+      setAfipSaving(false);
     }
   }
 
@@ -697,6 +749,77 @@ export default function SettingsPage() {
           )}
         </div>
       </section>}
+
+      {/* FACTURACIÓN AFIP */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Facturación AFIP</h2>
+          <p className={styles.sectionDesc}>
+            Cargá tus datos fiscales y el certificado de AFIP para poder emitir facturas electrónicas. El certificado se guarda cifrado y nunca se muestra de nuevo.
+          </p>
+        </div>
+        {afip && (
+          <div className={styles.fields}>
+            <Field label="CUIT">
+              <input className={styles.input} value={afip.cuit || ''} onChange={e => setAfipField('cuit', e.target.value)} placeholder="20111111112" />
+            </Field>
+            <div className={styles.row}>
+              <Field label="Situación fiscal">
+                <select className={styles.select} value={afip.situacionFiscal || 'monotributo'} onChange={e => setAfipField('situacionFiscal', e.target.value)}>
+                  <option value="monotributo">Monotributo</option>
+                  <option value="responsable_inscripto">Responsable Inscripto</option>
+                </select>
+              </Field>
+              <Field label="Punto de venta">
+                <input className={styles.input} type="number" min="1" value={afip.puntoVenta || ''} onChange={e => setAfipField('puntoVenta', e.target.value)} />
+              </Field>
+            </div>
+            <Field label="Razón social">
+              <input className={styles.input} value={afip.razonSocial || ''} onChange={e => setAfipField('razonSocial', e.target.value)} />
+            </Field>
+            <Field label="Domicilio comercial">
+              <input className={styles.input} value={afip.domicilioComercial || ''} onChange={e => setAfipField('domicilioComercial', e.target.value)} />
+            </Field>
+            <div className={styles.row}>
+              <Field label="Ingresos brutos">
+                <input className={styles.input} value={afip.ingresosBrutos || ''} onChange={e => setAfipField('ingresosBrutos', e.target.value)} />
+              </Field>
+              <Field label="Inicio de actividades">
+                <input
+                  className={styles.input}
+                  type="date"
+                  value={afip.fechaInicioActividades?.slice(0, 10) || ''}
+                  onChange={e => setAfipField('fechaInicioActividades', e.target.value)}
+                />
+              </Field>
+            </div>
+            <Field label="Ambiente">
+              <div className={styles.switchRow}>
+                <Switch checked={Boolean(afip.production)} onChange={v => setAfipField('production', v)} />
+                <span className={styles.switchLabel}>
+                  {afip.production ? 'Producción' : 'Homologación (pruebas de AFIP)'}
+                </span>
+              </div>
+            </Field>
+            <Field
+              label="Certificado (.crt)"
+              hint={afip.certConfigured ? 'Configurado ✓ — pegá uno nuevo abajo sólo si querés reemplazarlo.' : 'No configurado'}
+            >
+              <textarea className={styles.textarea} rows={4} value={afipCert} onChange={e => setAfipCert(e.target.value)} placeholder="-----BEGIN CERTIFICATE-----" />
+            </Field>
+            <Field label="Clave privada (.key)">
+              <textarea className={styles.textarea} rows={4} value={afipKey} onChange={e => setAfipKey(e.target.value)} placeholder="-----BEGIN PRIVATE KEY-----" />
+            </Field>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <button type="button" className={styles.btnSave} onClick={handleAfipSave} disabled={afipSaving}>
+                {afipSaving ? 'Guardando...' : 'Guardar configuración de AFIP'}
+              </button>
+              {afipError && <span className={styles.errorText}>{afipError}</span>}
+              {!afipError && afipSaved && <span className={styles.savedText}>✓ Guardado</span>}
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* ZONA DE PELIGRO */}
       <section className={styles.section}>
